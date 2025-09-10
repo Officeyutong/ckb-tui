@@ -1,11 +1,13 @@
-use std::time::Duration;
+use std::sync::{Arc, atomic::AtomicBool};
 
 use ckb_sdk::CkbRpcClient;
 use clap::Parser;
-use cursive::Cursive;
-use rand::Rng;
+use cursive::{
+    Cursive,
+    views::{Dialog, TextView},
+};
 
-use crate::components::dashboard::{dashboard, overview::OverviewDashboardData};
+use crate::components::dashboard::{dashboard, overview::fetch_overview_data};
 
 mod components;
 
@@ -24,36 +26,39 @@ fn main() -> anyhow::Result<()> {
     let mut cur = cursive::default();
     cur.add_global_callback('q', |s| s.quit());
     cur.add_global_callback('~', cursive::Cursive::toggle_debug_console);
-    cur.add_layer(dashboard());
-    let cb_sink = cur.cb_sink().clone();
-    std::thread::spawn(move || {
-        let mut rng = rand::rng();
-        loop {
-            let data = OverviewDashboardData {
-                average_latency: rng.random_range(1..1000),
-                current_block: rng.random_range(1..1000),
-                estimated_time_left: rng.random_range(1..1000),
-                inbound_peers: rng.random_range(1..10),
-                outbound_peers: rng.random_range(1..10),
-                syncing_progress: rng.random(),
-                cpu_percent: rng.random(),
-                disk_total: rng.random_range(1..1000),
-                disk_used: rng.random_range(1..1000),
-                last_coming_tx: rng.random_range(1..1000),
-                ram_total: rng.random_range(1..1000),
-                ram_used: rng.random_range(1..1000),
-                relaying_count: rng.random_range(1..1000),
-                total_nodes_online: rng.random_range(1..1000),
-                tx_pool_pending: rng.random_range(1..1000),
-            };
+    let loading_variable = Arc::new(AtomicBool::new(false));
+    let content_view = dashboard(&mut cur, loading_variable.clone());
+
+    cur.add_global_callback('r', move |cur| {
+        if loading_variable.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        let cb_sink = cur.cb_sink().clone();
+        let loading_variable = loading_variable.clone();
+        let client = client.clone();
+        std::thread::spawn(move || {
+            loading_variable.store(true, std::sync::atomic::Ordering::SeqCst);
+            let data = fetch_overview_data(&client);
+
             cb_sink
-                .send(Box::new(move |siv: &mut Cursive| {
-                    data.update_to_view("root", siv);
+                .send(Box::new(move |siv: &mut Cursive| match data {
+                    Ok(o) => o.update_to_view(siv),
+                    Err(err) => {
+                        siv.add_layer(
+                            Dialog::around(TextView::new(format!("{}", err)))
+                                .title("Error")
+                                .button("Close", |s| {
+                                    s.pop_layer();
+                                }),
+                        );
+                    }
                 }))
                 .unwrap();
-            std::thread::sleep(Duration::from_secs(1));
-        }
+            loading_variable.store(false, std::sync::atomic::Ordering::SeqCst);
+        });
     });
+
+    cur.add_layer(content_view);
     cur.run();
 
     Ok(())

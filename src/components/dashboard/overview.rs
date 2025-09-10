@@ -1,8 +1,14 @@
+use std::sync::atomic::AtomicU64;
+
+use ckb_sdk::CkbRpcClient;
 use cursive::{
     Cursive,
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
     views::{DummyView, LinearLayout, Panel, TextView},
 };
+use anyhow::{Context, Result,anyhow};
+use rand::Rng;
+use sysinfo::System;
 
 mod names {
     pub const CURRENT_BLOCK: &str = "overview_dashboard_current_block";
@@ -17,6 +23,11 @@ mod names {
     pub const DISK: &str = "overview_dashboard_disk";
     pub const PENDING_TX: &str = "overview_dashboard_pending_tx";
     pub const LAST_COMING_TX: &str = "overview_dashboard_last_coming_tx";
+}
+
+#[derive(Debug)]
+pub struct OverviewDashboardState {
+    pub last_coming_tx: AtomicU64,
 }
 
 #[derive(Debug, Clone)]
@@ -39,7 +50,7 @@ pub struct OverviewDashboardData {
 }
 
 impl OverviewDashboardData {
-    pub fn update_to_view(&self, _prefix: &str, siv: &mut Cursive) {
+    pub fn update_to_view(&self, siv: &mut Cursive) {
         siv.call_on_name(names::CURRENT_BLOCK, |view: &mut TextView| {
             view.set_content(format!("  • Current Block: #{}", self.current_block));
         });
@@ -106,6 +117,45 @@ impl OverviewDashboardData {
     }
 }
 
+pub fn fetch_overview_data(client: &CkbRpcClient) -> Result<OverviewDashboardData> {
+    let mut rng = rand::rng();
+    let peers = client
+        .get_peers()
+        .with_context(|| anyhow!("Unable to get peers"))?
+        .into_iter()
+        .map(|x| x.is_outbound)
+        .collect::<Vec<_>>();
+    let outbound_peers = peers.iter().filter(|x| **x).count();
+    let inbound_peers = peers.len() - outbound_peers;
+    let tip_header = client
+        .get_tip_header()
+        .with_context(|| anyhow!("Unable to get tip header"))?;
+    let tx_pool_info = client
+        .tx_pool_info()
+        .with_context(|| anyhow!("Unable to get tx pool info"))?;
+    let mut system = System::new_all();
+    system.refresh_cpu_usage();
+    system.refresh_memory();
+    let data = OverviewDashboardData {
+        average_latency: rng.random_range(1..1000),
+        current_block: tip_header.inner.number.value() as usize,
+        estimated_time_left: rng.random_range(1..1000),
+        inbound_peers,
+        outbound_peers,
+        syncing_progress: rng.random(),
+        cpu_percent: system.global_cpu_usage() as f64,
+        disk_total: rng.random_range(1..1000),
+        disk_used: rng.random_range(1..1000),
+        last_coming_tx: rng.random_range(1..1000),
+        ram_total: system.total_memory() as usize / 1024 / 1024,
+        ram_used: system.used_memory() as usize / 1024 / 1024,
+        relaying_count: rng.random_range(1..1000),
+        total_nodes_online: rng.random_range(1..1000),
+        tx_pool_pending: tx_pool_info.pending.value() as usize,
+    };
+
+    Ok(data)
+}
 pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
     LinearLayout::vertical()
         .child(
@@ -170,7 +220,4 @@ pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
                 ))
                 .scrollable(),
         )
-        .child(Panel::new(TextView::new(
-            "Press [Q] to quit, [Tab] to switch panels, [R] to refresh",
-        )))
 }
