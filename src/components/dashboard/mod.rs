@@ -22,6 +22,7 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
             .child(basic_info_dashboard())
             .child(Panel::new(TextView::new(
                 "Press [Q] to quit, [Tab] to switch panels, [R] to refresh",
-            ))),
+            )))
+            ,
     )
 }

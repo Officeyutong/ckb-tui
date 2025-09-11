@@ -165,21 +165,21 @@ pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
                 LinearLayout::vertical()
                     .child(TextView::new("[Sync Status]"))
                     .child(
-                        TextView::new("  • Current Block: #123456").with_name(names::CURRENT_BLOCK),
+                        TextView::new("  • Current Block: Loading..").with_name(names::CURRENT_BLOCK),
                     )
-                    .child(TextView::new("  • Syncing: 87.5%").with_name(names::SYNCING_PROGRESS))
+                    .child(TextView::new("  • Syncing: Loading..").with_name(names::SYNCING_PROGRESS))
                     .child(
-                        TextView::new("  • Estimated time left: ~12min")
+                        TextView::new("  • Estimated time left: Loading..")
                             .with_name(names::ESTIMATED_TIME_LEFT),
                     )
                     .child(DummyView::new().fixed_height(1))
                     .child(TextView::new("[Peers]"))
                     .child(
-                        TextView::new("  • Connected: 8 (6 outbound / 2 in bound)")
+                        TextView::new("  • Connected: Loading..")
                             .with_name(names::CONNECTED_PEERS),
                     )
                     .child(
-                        TextView::new("  • Avg latency: 54ms").with_name(names::AVERAGE_LATENCY),
+                        TextView::new("  • Avg latency: Loading..").with_name(names::AVERAGE_LATENCY),
                     ),
             )
             .scrollable(),
@@ -189,11 +189,11 @@ pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
                 LinearLayout::vertical()
                     .child(TextView::new("[Network Impact]"))
                     .child(
-                        TextView::new("  • You're 1 of ~950 full nodes online")
+                        TextView::new("")
                             .with_name(names::TOTAL_NODES),
                     )
                     .child(
-                        TextView::new("  • Currently relaying data to 6 peers")
+                        TextView::new("")
                             .with_name(names::RELAYING_TO_COUNT),
                     )
                     .child(TextView::new("  • Your node is reachable ✓")),
@@ -205,17 +205,17 @@ pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
                 .child(Panel::new(
                     LinearLayout::vertical()
                         .child(TextView::new("[System Info]"))
-                        .child(TextView::new("  • CPU: 14%").with_name(names::CPU))
-                        .child(TextView::new("  • RAM: 2.3GB / 8GB").with_name(names::RAM))
-                        .child(TextView::new("  • Disk: 111GB / 222GB").with_name(names::DISK))
+                        .child(TextView::new("").with_name(names::CPU))
+                        .child(TextView::new("").with_name(names::RAM))
+                        .child(TextView::new("").with_name(names::DISK))
                         .min_width(50),
                 ))
                 .child(Panel::new(
                     LinearLayout::vertical()
                         .child(TextView::new("[Tx Pool]"))
-                        .child(TextView::new("  • Pending: 120 txs").with_name(names::PENDING_TX))
+                        .child(TextView::new("").with_name(names::PENDING_TX))
                         .child(
-                            TextView::new("  • Last incoming tx: 15s ago")
+                            TextView::new("")
                                 .with_name(names::LAST_COMING_TX),
                         )
                         .min_width(50),
