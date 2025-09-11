@@ -4,8 +4,10 @@ use ckb_sdk::CkbRpcClient;
 use clap::Parser;
 use cursive::{
     Cursive,
-    views::{Dialog, TextView},
+    view::Resizable,
+    views::{Dialog, DummyView, TextView},
 };
+use cursive_async_view::AsyncView;
 
 use crate::components::dashboard::{dashboard, overview::fetch_overview_data};
 
@@ -27,7 +29,6 @@ fn main() -> anyhow::Result<()> {
     cur.add_global_callback('q', |s| s.quit());
     cur.add_global_callback('~', cursive::Cursive::toggle_debug_console);
     let loading_variable = Arc::new(AtomicBool::new(false));
-    let content_view = dashboard(&mut cur, loading_variable.clone());
 
     cur.add_global_callback('r', move |cur| {
         if loading_variable.load(std::sync::atomic::Ordering::SeqCst) {
@@ -36,21 +37,31 @@ fn main() -> anyhow::Result<()> {
         let cb_sink = cur.cb_sink().clone();
         let loading_variable = loading_variable.clone();
         let client = client.clone();
+        let content_view = Dialog::around(AsyncView::new(cur, || {
+            cursive_async_view::AsyncState::<DummyView>::Pending
+        }))
+        .title("Refreshing..")
+        .fixed_width(50);
+
+        cur.add_layer(content_view);
         std::thread::spawn(move || {
             loading_variable.store(true, std::sync::atomic::Ordering::SeqCst);
             let data = fetch_overview_data(&client);
 
             cb_sink
-                .send(Box::new(move |siv: &mut Cursive| match data {
-                    Ok(o) => o.update_to_view(siv),
-                    Err(err) => {
-                        siv.add_layer(
-                            Dialog::around(TextView::new(format!("{}", err)))
-                                .title("Error")
-                                .button("Close", |s| {
-                                    s.pop_layer();
-                                }),
-                        );
+                .send(Box::new(move |siv: &mut Cursive| {
+                    siv.pop_layer();
+                    match data {
+                        Ok(o) => o.update_to_view(siv),
+                        Err(err) => {
+                            siv.add_layer(
+                                Dialog::around(TextView::new(format!("{}", err)))
+                                    .title("Error")
+                                    .button("Close", |s| {
+                                        s.pop_layer();
+                                    }),
+                            );
+                        }
                     }
                 }))
                 .unwrap();
@@ -58,7 +69,7 @@ fn main() -> anyhow::Result<()> {
         });
     });
 
-    cur.add_layer(content_view);
+    cur.add_layer(dashboard());
     cur.run();
 
     Ok(())

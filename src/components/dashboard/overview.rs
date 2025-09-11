@@ -1,12 +1,12 @@
 use std::sync::atomic::AtomicU64;
 
+use anyhow::{Context, Result, anyhow};
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     Cursive,
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
     views::{DummyView, LinearLayout, Panel, TextView},
 };
-use anyhow::{Context, Result,anyhow};
 use rand::Rng;
 use sysinfo::System;
 
@@ -133,6 +133,8 @@ pub fn fetch_overview_data(client: &CkbRpcClient) -> Result<OverviewDashboardDat
     let tx_pool_info = client
         .tx_pool_info()
         .with_context(|| anyhow!("Unable to get tx pool info"))?;
+    let fs_stats = fs2::statvfs(std::env::current_exe()?)?;
+
     let mut system = System::new_all();
     system.refresh_cpu_usage();
     system.refresh_memory();
@@ -144,8 +146,8 @@ pub fn fetch_overview_data(client: &CkbRpcClient) -> Result<OverviewDashboardDat
         outbound_peers,
         syncing_progress: rng.random(),
         cpu_percent: system.global_cpu_usage() as f64,
-        disk_total: rng.random_range(1..1000),
-        disk_used: rng.random_range(1..1000),
+        disk_total: fs_stats.total_space() as usize / 1024 / 1024 / 1024,
+        disk_used: (fs_stats.total_space() - fs_stats.free_space()) as usize / 1024 / 1024 / 1024,
         last_coming_tx: rng.random_range(1..1000),
         ram_total: system.total_memory() as usize / 1024 / 1024,
         ram_used: system.used_memory() as usize / 1024 / 1024,
