@@ -9,7 +9,10 @@ use cursive::{
 };
 use cursive_async_view::AsyncView;
 
-use crate::components::dashboard::{dashboard, overview::fetch_overview_data};
+use crate::components::{
+    FetchData, UpdateToView,
+    dashboard::{GeneralDashboardData, dashboard, overview::OverviewDashboardData},
+};
 
 mod components;
 
@@ -41,12 +44,25 @@ fn main() -> anyhow::Result<()> {
         let loading_variable = loading_variable.clone();
         let client = client.clone();
         std::thread::spawn(move || {
+            let client_cloned = client.clone();
+            cb_sink
+                .send(Box::new(
+                    move |siv| match GeneralDashboardData::fetch_data_through_client(&client_cloned)
+                    {
+                        Ok(result) => {
+                            result.update_to_view(siv);
+                        }
+                        Err(_) => {}
+                    },
+                ))
+                .unwrap();
+
             loop {
                 match rx.recv().unwrap() {
                     SyncRequest::Stop => break,
                     SyncRequest::RequestSync { pop_layer_at_end } => {
                         loading_variable.store(true, std::sync::atomic::Ordering::SeqCst);
-                        let data = fetch_overview_data(&client);
+                        let data = OverviewDashboardData::fetch_data_through_client(&client);
 
                         cb_sink
                             .send(Box::new(move |siv: &mut Cursive| {
@@ -98,6 +114,7 @@ fn main() -> anyhow::Result<()> {
         pop_layer_at_end: false,
     })
     .unwrap();
+    siv.set_autorefresh(true);
     siv.add_layer(dashboard());
     siv.run();
     tx.send(SyncRequest::Stop).unwrap();
