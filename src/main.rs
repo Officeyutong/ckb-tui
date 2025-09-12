@@ -1,4 +1,7 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::{
+    sync::{Arc, atomic::AtomicBool},
+    time::Duration,
+};
 
 use ckb_sdk::CkbRpcClient;
 use clap::Parser;
@@ -11,7 +14,7 @@ use cursive_async_view::AsyncView;
 
 use crate::components::{
     FetchData, UpdateToView,
-    dashboard::{GeneralDashboardData, dashboard, overview::OverviewDashboardData},
+    dashboard::{GeneralDashboardData, dashboard, overview::OverviewDashboardData, set_loading},
 };
 
 mod components;
@@ -81,6 +84,7 @@ fn main() -> anyhow::Result<()> {
                                         );
                                     }
                                 }
+                                set_loading(siv, false);
                             }))
                             .unwrap();
                         loading_variable.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -96,7 +100,7 @@ fn main() -> anyhow::Result<()> {
             if loading_variable.load(std::sync::atomic::Ordering::SeqCst) {
                 return;
             }
-
+            set_loading(siv, true);
             let content_view = Dialog::around(AsyncView::new(siv, || {
                 cursive_async_view::AsyncState::<DummyView>::Pending
             }))
@@ -108,6 +112,22 @@ fn main() -> anyhow::Result<()> {
                 pop_layer_at_end: true,
             })
             .unwrap();
+        });
+    }
+    {
+        let tx = tx.clone();
+        let cb_sink = siv.cb_sink().clone();
+        std::thread::spawn(move || {
+            loop {
+                cb_sink
+                    .send(Box::new(|siv| set_loading(siv, true)))
+                    .unwrap();
+                tx.send(SyncRequest::RequestSync {
+                    pop_layer_at_end: false,
+                })
+                .unwrap();
+                std::thread::sleep(Duration::from_secs(3));
+            }
         });
     }
     tx.send(SyncRequest::RequestSync {

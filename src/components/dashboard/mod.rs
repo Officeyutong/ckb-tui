@@ -2,17 +2,22 @@ pub mod overview;
 
 use anyhow::{Context, anyhow};
 use cursive::{
+    Cursive,
     view::{IntoBoxedView, Nameable, Resizable},
     views::{Button, LinearLayout, Panel, TextView},
 };
 
 use crate::components::{
     FetchData, UpdateToView,
-    dashboard::{names::TITLE, overview::basic_info_dashboard},
+    dashboard::{
+        names::{REFRESHING_LABEL, TITLE},
+        overview::basic_info_dashboard,
+    },
 };
 
 mod names {
     pub const TITLE: &str = "dashboard_title";
+    pub const REFRESHING_LABEL: &str = "dashboard_refreshing_label";
 }
 
 pub struct GeneralDashboardData {
@@ -51,6 +56,7 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
     Panel::new(
         LinearLayout::vertical()
             .child(TextView::new("CKB Node Monitor").center().with_name(TITLE))
+            .child(TextView::new(" ").center().with_name(REFRESHING_LABEL))
             .child(
                 LinearLayout::horizontal()
                     .child(Button::new("Overview", |_| ()).fixed_width(15))
@@ -65,4 +71,14 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
                 "Press [Q] to quit, [Tab] to switch panels, [R] to refresh",
             ))),
     )
+}
+
+pub fn set_loading(siv: &mut Cursive, loading: bool) {
+    siv.call_on_name(REFRESHING_LABEL, move |view: &mut TextView| {
+        if loading {
+            view.set_content("Refreshing...");
+        } else {
+            view.set_content(" ");
+        }
+    });
 }
