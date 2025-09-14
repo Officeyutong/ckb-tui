@@ -6,6 +6,7 @@ use cursive::{
     view::{IntoBoxedView, Nameable, Resizable},
     views::{Button, LinearLayout, Panel, TextView},
 };
+use cursive_aligned_view::Alignable;
 
 use crate::components::{
     FetchData, UpdateToView,
@@ -64,7 +65,8 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
                     .child(Button::new("Mempool", |_| ()).fixed_width(15))
                     .child(Button::new("Peers", |_| ()).fixed_width(15))
                     .child(Button::new("System Info", |_| ()).fixed_width(15))
-                    .child(Button::new("Logs", |_| ()).fixed_width(15)),
+                    .child(Button::new("Logs", |_| ()).fixed_width(15))
+                    .align_center(),
             )
             .child(basic_info_dashboard())
             .child(Panel::new(TextView::new(

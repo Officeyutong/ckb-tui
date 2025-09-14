@@ -13,12 +13,16 @@ use cursive::{
 use cursive_async_view::AsyncView;
 
 use crate::components::{
-    FetchData, UpdateToView,
-    dashboard::{GeneralDashboardData, dashboard, overview::OverviewDashboardData, set_loading},
+    FetchData, UpdateState, UpdateToView,
+    dashboard::{
+        GeneralDashboardData, dashboard,
+        overview::{OverviewDashboardData, OverviewDashboardState},
+        set_loading,
+    },
 };
 
 mod components;
-
+mod utils;
 enum SyncRequest {
     Stop,
     RequestSync { pop_layer_at_end: bool },
@@ -118,10 +122,17 @@ fn main() -> anyhow::Result<()> {
         let tx = tx.clone();
         let cb_sink = siv.cb_sink().clone();
         std::thread::spawn(move || {
+            let mut overview_state = OverviewDashboardState::default();
             loop {
                 cb_sink
                     .send(Box::new(|siv| set_loading(siv, true)))
                     .unwrap();
+                overview_state = overview_state.update_state();
+                let overview_state = overview_state.clone();
+                cb_sink
+                    .send(Box::new(move |siv| overview_state.update_to_view(siv)))
+                    .unwrap();
+
                 tx.send(SyncRequest::RequestSync {
                     pop_layer_at_end: false,
                 })

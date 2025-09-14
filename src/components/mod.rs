@@ -10,3 +10,7 @@ pub trait UpdateToView {
 pub trait FetchData: Sized {
     fn fetch_data_through_client(client: &CkbRpcClient) -> anyhow::Result<Self>;
 }
+
+pub trait UpdateState: Sized {
+    fn update_state(self) -> Self;
+}

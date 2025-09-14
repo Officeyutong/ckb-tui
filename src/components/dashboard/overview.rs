@@ -3,17 +3,20 @@ use ckb_sdk::CkbRpcClient;
 use cursive::{
     Cursive,
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
-    views::{LinearLayout, Panel, ProgressBar, TextView},
+    views::{LinearLayout, NamedView, Panel, ProgressBar, TextView},
 };
 use sysinfo::System;
 
-use crate::components::{
-    FetchData, UpdateToView,
-    dashboard::overview::names::{
-        AVERAGE_BLOCK_TIME, AVERAGE_LATENCY, COMMITING_TX, CONNECTED_PEERS, CPU, CURRENT_BLOCK,
-        DIFFICULTY, DISK, EPOCH, ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, PENDING_TX,
-        PROPOSED_TX, RAM, REJECTED_TX, TOTAL_POOL_SIZE,
+use crate::{
+    components::{
+        FetchData, UpdateState, UpdateToView,
+        dashboard::overview::names::{
+            AVERAGE_BLOCK_TIME, AVERAGE_LATENCY, COMMITING_TX, CONNECTED_PEERS, CPU, CPU_HISTORY,
+            CURRENT_BLOCK, DIFFICULTY, DISK, EPOCH, ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT,
+            HASH_RATE, PENDING_TX, PROPOSED_TX, RAM, REJECTED_TX, TOTAL_POOL_SIZE,
+        },
     },
+    utils::bar_chart::SimpleBarChart,
 };
 
 mod names {
@@ -35,6 +38,33 @@ mod names {
     pub const PROPOSED_TX: &str = "overview_dashboard_proposed_tx";
     pub const COMMITING_TX: &str = "overview_dashboard_commiting_tx";
     pub const REJECTED_TX: &str = "overview_dashboard_rejected_tx";
+    pub const CPU_HISTORY: &str = "overview_dashboard_cpu_history";
+}
+#[derive(Default, Clone)]
+pub struct OverviewDashboardState {
+    pub cpu_history: queue::Queue<f64>,
+}
+
+impl UpdateState for OverviewDashboardState {
+    fn update_state(mut self) -> Self {
+        let mut system = System::new_all();
+        system.refresh_cpu_usage();
+        self.cpu_history
+            .queue(system.global_cpu_usage() as f64 / 100.0)
+            .unwrap();
+        if self.cpu_history.len() > 20 {
+            self.cpu_history.dequeue();
+        }
+        self
+    }
+}
+
+impl UpdateToView for OverviewDashboardState {
+    fn update_to_view(&self, siv: &mut Cursive) {
+        siv.call_on_name(CPU_HISTORY, |view: &mut SimpleBarChart| {
+            view.set_data(self.cpu_history.vec()).unwrap();
+        });
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -351,6 +381,17 @@ pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
                                 LinearLayout::horizontal()
                                     .child(TextView::new("• Disk:").min_width(10))
                                     .child(TextView::empty().with_name(DISK)),
+                            )
+                            .child(
+                                LinearLayout::horizontal()
+                                    .child(TextView::new("• CPU load:").min_width(10))
+                                    .child(NamedView::new(
+                                        CPU_HISTORY,
+                                        SimpleBarChart::new(&[
+                                            0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
+                                        ])
+                                        .unwrap(),
+                                    )),
                             ),
                     )
                     .min_width(50),

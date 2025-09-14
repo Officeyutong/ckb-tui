@@ -650,9 +650,11 @@ dependencies = [
  "ckb-sdk",
  "clap",
  "cursive",
+ "cursive-aligned-view",
  "cursive-async-view",
  "fs2",
  "log",
+ "queue",
  "rand 0.9.2",
  "sysinfo",
 ]
@@ -947,6 +949,15 @@ dependencies = [
  "signal-hook",
  "unicode-segmentation",
  "unicode-width",
+]
+
+[[package]]
+name = "cursive-aligned-view"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "376f1c24af1ac14ffbd180caabc4022707265622d2280263e4fff8dd5ba0dc86"
+dependencies = [
+ "cursive_core",
 ]
 
 [[package]]
@@ -2330,6 +2341,12 @@ checksum = "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "queue"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ff7e7fd62294a081720771513c1c1c995468a5d4e771a2928e423b88682ce48"
 
 [[package]]
 name = "quote"
