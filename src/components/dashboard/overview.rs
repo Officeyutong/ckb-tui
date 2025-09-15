@@ -15,7 +15,7 @@ use crate::{
             AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITING_TX, CONNECTED_PEERS,
             CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED, DISK_USAGE, EPOCH,
             ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK, PENDING_TX, PROPOSED_TX,
-            RAM, REJECTED_TX, TOTAL_POOL_SIZE,
+            RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
         },
     },
     utils::bar_chart::SimpleBarChart,
@@ -360,7 +360,12 @@ pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
                             .child(
                                 LinearLayout::horizontal()
                                     .child(TextView::new("• Progress:").min_width(20))
-                                    .child(ProgressBar::new().range(0, 100)),
+                                    .child(
+                                        ProgressBar::new()
+                                            .range(0, 100)
+                                            .with_name(SYNCING_PROGRESS)
+                                            .min_width(30),
+                                    ),
                             )
                             .child(
                                 LinearLayout::horizontal()
