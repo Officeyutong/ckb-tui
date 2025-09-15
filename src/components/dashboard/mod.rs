@@ -64,7 +64,6 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
                     .child(Button::new("Blockchain", |_| ()).fixed_width(15))
                     .child(Button::new("Mempool", |_| ()).fixed_width(15))
                     .child(Button::new("Peers", |_| ()).fixed_width(15))
-                    .child(Button::new("System Info", |_| ()).fixed_width(15))
                     .child(Button::new("Logs", |_| ()).fixed_width(15))
                     .align_center(),
             )

@@ -1,19 +1,21 @@
 use anyhow::{Context, anyhow};
+use chrono::Local;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     Cursive,
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
     views::{LinearLayout, NamedView, Panel, ProgressBar, TextView},
 };
-use sysinfo::System;
+use sysinfo::{Disks, Networks, System};
 
 use crate::{
     components::{
         FetchData, UpdateState, UpdateToView,
         dashboard::overview::names::{
-            AVERAGE_BLOCK_TIME, AVERAGE_LATENCY, COMMITING_TX, CONNECTED_PEERS, CPU, CPU_HISTORY,
-            CURRENT_BLOCK, DIFFICULTY, DISK, EPOCH, ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT,
-            HASH_RATE, PENDING_TX, PROPOSED_TX, RAM, REJECTED_TX, TOTAL_POOL_SIZE,
+            AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITING_TX, CONNECTED_PEERS,
+            CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED, DISK_USAGE, EPOCH,
+            ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK, PENDING_TX, PROPOSED_TX,
+            RAM, REJECTED_TX, TOTAL_POOL_SIZE,
         },
     },
     utils::bar_chart::SimpleBarChart,
@@ -27,7 +29,7 @@ mod names {
     pub const AVERAGE_LATENCY: &str = "overview_dashboard_average_latency";
     pub const CPU: &str = "overview_dashboard_cpu";
     pub const RAM: &str = "overview_dashboard_ram";
-    pub const DISK: &str = "overview_dashboard_disk";
+    pub const DISK_USAGE: &str = "overview_dashboard_disk";
     pub const EPOCH: &str = "overview_dashboard_epoch";
     pub const ESTIMATED_EPOCH_TIME: &str = "overview_dashboard_estimated_epoch_time";
     pub const AVERAGE_BLOCK_TIME: &str = "overview_dashboard_average_block_time";
@@ -39,10 +41,68 @@ mod names {
     pub const COMMITING_TX: &str = "overview_dashboard_commiting_tx";
     pub const REJECTED_TX: &str = "overview_dashboard_rejected_tx";
     pub const CPU_HISTORY: &str = "overview_dashboard_cpu_history";
+    pub const DISK_SPEED: &str = "overview_dashboard_disk_speed";
+    pub const AVERAGE_FEE_RATE: &str = "overview_dashboard_average_fee_rate";
+    pub const NETWORK: &str = "overview_dashboard_network";
 }
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct OverviewDashboardState {
     pub cpu_history: queue::Queue<f64>,
+    pub last_update: chrono::DateTime<Local>,
+    pub total_disk_write_bytes: u64,
+    pub total_disk_read_bytes: u64,
+    // Bytes per sec
+    pub disk_write_speed: f64,
+    // Bytes per sec
+    pub disk_read_speed: f64,
+
+    pub total_network_send_bytes: u64,
+    pub total_network_receive_bytes: u64,
+    // Bytes per sec
+    pub network_send_speed: f64,
+    // Bytes per sec
+    pub network_receive_speed: f64,
+}
+fn get_total_read_and_total_write_bytes_for_disk() -> (u64, u64) {
+    let disks = Disks::new_with_refreshed_list();
+    let (read, write) = disks
+        .into_iter()
+        .map(|x| x.usage())
+        .map(|x| (x.total_read_bytes, x.total_written_bytes))
+        .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+
+    (read, write)
+}
+
+fn get_total_send_and_receive_bytes_for_network_devices() -> (u64, u64) {
+    let networks = Networks::new_with_refreshed_list();
+    let (send, received) = networks
+        .into_iter()
+        .map(|x| x.1)
+        .map(|x| (x.total_transmitted(), x.total_received()))
+        .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+
+    (send, received)
+}
+
+impl OverviewDashboardState {
+    pub fn new() -> Self {
+        let (read, write) = get_total_read_and_total_write_bytes_for_disk();
+        let (send, receive) = get_total_send_and_receive_bytes_for_network_devices();
+
+        Self {
+            cpu_history: Default::default(),
+            last_update: chrono::Local::now(),
+            disk_read_speed: 1.0,
+            disk_write_speed: 1.0,
+            total_disk_read_bytes: read,
+            total_disk_write_bytes: write,
+            network_receive_speed: 1.0,
+            network_send_speed: 1.0,
+            total_network_receive_bytes: receive,
+            total_network_send_bytes: send,
+        }
+    }
 }
 
 impl UpdateState for OverviewDashboardState {
@@ -55,6 +115,21 @@ impl UpdateState for OverviewDashboardState {
         if self.cpu_history.len() > 20 {
             self.cpu_history.dequeue();
         }
+        let now = chrono::Local::now();
+        let diff_secs = (now - self.last_update).num_seconds() as f64;
+
+        let (read, write) = get_total_read_and_total_write_bytes_for_disk();
+        let (send, receive) = get_total_send_and_receive_bytes_for_network_devices();
+        self.disk_read_speed = (read - self.total_disk_read_bytes) as f64 / diff_secs;
+        self.disk_write_speed = (write - self.total_disk_write_bytes) as f64 / diff_secs;
+        self.network_receive_speed =
+            (receive - self.total_network_receive_bytes) as f64 / diff_secs;
+        self.network_send_speed = (send - self.total_network_send_bytes) as f64 / diff_secs;
+        self.total_disk_read_bytes = read;
+        self.total_disk_write_bytes = write;
+        self.total_network_receive_bytes = receive;
+        self.total_network_send_bytes = send;
+        self.last_update = chrono::Local::now();
         self
     }
 }
@@ -63,6 +138,20 @@ impl UpdateToView for OverviewDashboardState {
     fn update_to_view(&self, siv: &mut Cursive) {
         siv.call_on_name(CPU_HISTORY, |view: &mut SimpleBarChart| {
             view.set_data(self.cpu_history.vec()).unwrap();
+        });
+        siv.call_on_name(DISK_SPEED, |view: &mut TextView| {
+            view.set_content(format!(
+                "{:.1} MB/s (Read)   {:.1} MB/s (Write)",
+                self.disk_read_speed / 1024.0 / 1024.0,
+                self.disk_write_speed / 1024.0 / 1024.0
+            ));
+        });
+        siv.call_on_name(NETWORK, |view: &mut TextView| {
+            view.set_content(format!(
+                "{:.1} MB/s (In)   {:.1} MB/s (Out)",
+                self.network_receive_speed / 1024.0 / 1024.0,
+                self.network_send_speed / 1024.0 / 1024.0
+            ));
         });
     }
 }
@@ -105,6 +194,9 @@ pub struct OverviewDashboardData {
 
     pub difficulty: f64,
     pub hash_rate: u64,
+
+    // shannons per KB
+    pub average_fee_rate: f64,
 }
 
 impl UpdateToView for OverviewDashboardData {
@@ -186,12 +278,16 @@ impl UpdateToView for OverviewDashboardData {
                 self.ram_total as f64 / 1024.0 / 1024.0 / 1024.0
             ));
         });
-        siv.call_on_name(names::DISK, |view: &mut TextView| {
+        siv.call_on_name(names::DISK_USAGE, |view: &mut TextView| {
             view.set_content(format!(
-                "{:.0}GB / {:.0}GB",
+                "{:.0}GB / {:.0}GB ({:.2}%)",
                 self.disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
-                self.disk_total as f64 / 1024.0 / 1024.0 / 1024.0
+                self.disk_total as f64 / 1024.0 / 1024.0 / 1024.0,
+                (self.disk_used as f64 / self.disk_total as f64 * 100.0)
             ));
+        });
+        siv.call_on_name(names::AVERAGE_FEE_RATE, |view: &mut TextView| {
+            view.set_content(format!("{} shannons/KB", self.average_fee_rate));
         });
     }
 }
@@ -246,6 +342,7 @@ impl FetchData for OverviewDashboardData {
             average_block_time: 0,
             difficulty: 0.0,
             hash_rate: 0,
+            average_fee_rate: -1.0,
         };
 
         Ok(data)
@@ -357,6 +454,11 @@ pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
                             )
                             .child(
                                 LinearLayout::horizontal()
+                                    .child(TextView::new("• Avg.Fee Rate:").min_width(20))
+                                    .child(TextView::empty().with_name(AVERAGE_FEE_RATE)),
+                            )
+                            .child(
+                                LinearLayout::horizontal()
                                     .child(TextView::new("• Rejected:").min_width(20))
                                     .child(TextView::empty().with_name(REJECTED_TX)),
                             ),
@@ -369,22 +471,22 @@ pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
                             .child(TextView::new("[System Info]"))
                             .child(
                                 LinearLayout::horizontal()
-                                    .child(TextView::new("• CPU:").min_width(10))
+                                    .child(TextView::new("• CPU:").min_width(12))
                                     .child(TextView::empty().with_name(CPU)),
                             )
                             .child(
                                 LinearLayout::horizontal()
-                                    .child(TextView::new("• RAM:").min_width(10))
+                                    .child(TextView::new("• RAM:").min_width(12))
                                     .child(TextView::empty().with_name(RAM)),
                             )
                             .child(
                                 LinearLayout::horizontal()
-                                    .child(TextView::new("• Disk:").min_width(10))
-                                    .child(TextView::empty().with_name(DISK)),
+                                    .child(TextView::new("• Disk:").min_width(12))
+                                    .child(TextView::empty().with_name(DISK_USAGE)),
                             )
                             .child(
                                 LinearLayout::horizontal()
-                                    .child(TextView::new("• CPU load:").min_width(10))
+                                    .child(TextView::new("• CPU load:").min_width(12))
                                     .child(NamedView::new(
                                         CPU_HISTORY,
                                         SimpleBarChart::new(&[
@@ -392,6 +494,16 @@ pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
                                         ])
                                         .unwrap(),
                                     )),
+                            )
+                            .child(
+                                LinearLayout::horizontal()
+                                    .child(TextView::new("• Disk I/O:").min_width(12))
+                                    .child(TextView::empty().with_name(DISK_SPEED)),
+                            )
+                            .child(
+                                LinearLayout::horizontal()
+                                    .child(TextView::new("• Network:").min_width(12))
+                                    .child(TextView::empty().with_name(NETWORK)),
                             ),
                     )
                     .min_width(50),

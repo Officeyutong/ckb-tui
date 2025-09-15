@@ -122,7 +122,7 @@ fn main() -> anyhow::Result<()> {
         let tx = tx.clone();
         let cb_sink = siv.cb_sink().clone();
         std::thread::spawn(move || {
-            let mut overview_state = OverviewDashboardState::default();
+            let mut overview_state = OverviewDashboardState::new();
             loop {
                 cb_sink
                     .send(Box::new(|siv| set_loading(siv, true)))
@@ -137,7 +137,7 @@ fn main() -> anyhow::Result<()> {
                     pop_layer_at_end: false,
                 })
                 .unwrap();
-                std::thread::sleep(Duration::from_secs(3));
+                std::thread::sleep(Duration::from_secs(1));
             }
         });
     }
