@@ -122,12 +122,33 @@ fn main() -> anyhow::Result<()> {
         let tx = tx.clone();
         let cb_sink = siv.cb_sink().clone();
         std::thread::spawn(move || {
-            let mut overview_state = OverviewDashboardState::new();
+            let mut overview_state = OverviewDashboardState::new(client.clone());
             loop {
                 cb_sink
                     .send(Box::new(|siv| set_loading(siv, true)))
                     .unwrap();
-                overview_state = overview_state.update_state();
+                let old_overview_state = overview_state.clone();
+                match overview_state.update_state() {
+                    Ok(o) => {
+                        overview_state = o;
+                    }
+                    Err(e) => {
+                        cb_sink
+                            .send(Box::new(move |siv| {
+                                siv.add_layer(
+                                    Dialog::around(TextView::new(format!(
+                                        "Unable to update state: {}",
+                                        e
+                                    )))
+                                    .button("Ok", |siv| {
+                                        siv.pop_layer();
+                                    }),
+                                )
+                            }))
+                            .unwrap();
+                        overview_state = old_overview_state;
+                    }
+                };
                 let overview_state = overview_state.clone();
                 cb_sink
                     .send(Box::new(move |siv| overview_state.update_to_view(siv)))

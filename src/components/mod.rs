@@ -12,5 +12,5 @@ pub trait FetchData: Sized {
 }
 
 pub trait UpdateState: Sized {
-    fn update_state(self) -> Self;
+    fn update_state(self) -> anyhow::Result<Self>;
 }

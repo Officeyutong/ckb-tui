@@ -62,33 +62,41 @@ pub struct OverviewDashboardState {
     pub network_send_speed: f64,
     // Bytes per sec
     pub network_receive_speed: f64,
-}
-fn get_total_read_and_total_write_bytes_for_disk() -> (u64, u64) {
-    let disks = Disks::new_with_refreshed_list();
-    let (read, write) = disks
-        .into_iter()
-        .map(|x| x.usage())
-        .map(|x| (x.total_read_bytes, x.total_written_bytes))
-        .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
 
-    (read, write)
-}
-
-fn get_total_send_and_receive_bytes_for_network_devices() -> (u64, u64) {
-    let networks = Networks::new_with_refreshed_list();
-    let (send, received) = networks
-        .into_iter()
-        .map(|x| x.1)
-        .map(|x| (x.total_transmitted(), x.total_received()))
-        .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
-
-    (send, received)
+    pub client: CkbRpcClient,
+    pub current_block: u64,
+    pub total_block: u64,
+    // 0~1
+    // pub syncing_progress: f64,
+    // In seconds
+    pub estimated_time_left: u64,
 }
 
 impl OverviewDashboardState {
-    pub fn new() -> Self {
-        let (read, write) = get_total_read_and_total_write_bytes_for_disk();
-        let (send, receive) = get_total_send_and_receive_bytes_for_network_devices();
+    fn get_total_read_and_total_write_bytes_for_disk() -> (u64, u64) {
+        let disks = Disks::new_with_refreshed_list();
+        let (read, write) = disks
+            .into_iter()
+            .map(|x| x.usage())
+            .map(|x| (x.total_read_bytes, x.total_written_bytes))
+            .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+
+        (read, write)
+    }
+
+    fn get_total_send_and_receive_bytes_for_network_devices() -> (u64, u64) {
+        let networks = Networks::new_with_refreshed_list();
+        let (send, received) = networks
+            .into_iter()
+            .map(|x| x.1)
+            .map(|x| (x.total_transmitted(), x.total_received()))
+            .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+
+        (send, received)
+    }
+    pub fn new(client: CkbRpcClient) -> Self {
+        let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk();
+        let (send, receive) = Self::get_total_send_and_receive_bytes_for_network_devices();
 
         Self {
             cpu_history: Default::default(),
@@ -101,12 +109,16 @@ impl OverviewDashboardState {
             network_send_speed: 1.0,
             total_network_receive_bytes: receive,
             total_network_send_bytes: send,
+            client,
+            current_block: 0,
+            estimated_time_left: 100,
+            total_block: 1,
         }
     }
 }
 
 impl UpdateState for OverviewDashboardState {
-    fn update_state(mut self) -> Self {
+    fn update_state(mut self) -> anyhow::Result<Self> {
         let mut system = System::new_all();
         system.refresh_cpu_usage();
         self.cpu_history
@@ -118,19 +130,41 @@ impl UpdateState for OverviewDashboardState {
         let now = chrono::Local::now();
         let diff_secs = (now - self.last_update).num_seconds() as f64;
 
-        let (read, write) = get_total_read_and_total_write_bytes_for_disk();
-        let (send, receive) = get_total_send_and_receive_bytes_for_network_devices();
-        self.disk_read_speed = (read - self.total_disk_read_bytes) as f64 / diff_secs;
-        self.disk_write_speed = (write - self.total_disk_write_bytes) as f64 / diff_secs;
-        self.network_receive_speed =
-            (receive - self.total_network_receive_bytes) as f64 / diff_secs;
-        self.network_send_speed = (send - self.total_network_send_bytes) as f64 / diff_secs;
-        self.total_disk_read_bytes = read;
-        self.total_disk_write_bytes = write;
-        self.total_network_receive_bytes = receive;
-        self.total_network_send_bytes = send;
+        {
+            let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk();
+            self.disk_read_speed = (read - self.total_disk_read_bytes) as f64 / diff_secs;
+            self.disk_write_speed = (write - self.total_disk_write_bytes) as f64 / diff_secs;
+            self.total_disk_read_bytes = read;
+            self.total_disk_write_bytes = write;
+        }
+        {
+            let (send, receive) = Self::get_total_send_and_receive_bytes_for_network_devices();
+            self.network_receive_speed =
+                (receive - self.total_network_receive_bytes) as f64 / diff_secs;
+            self.network_send_speed = (send - self.total_network_send_bytes) as f64 / diff_secs;
+            self.total_network_receive_bytes = receive;
+            self.total_network_send_bytes = send;
+        }
+        {
+            let tip_header = self
+                .client
+                .get_tip_header()
+                .with_context(|| anyhow!("Unable to get tip header"))?;
+            let sync_state = self
+                .client
+                .sync_state()
+                .with_context(|| anyhow!("Unable to get sync_state"))?;
+            let current_block = tip_header.inner.number.value();
+            let total_block = sync_state.best_known_block_number.value();
+            // blocks per sec
+            let block_sync_speed = (current_block - self.current_block) as f64 / diff_secs;
+            let estimated_seconds = (total_block - current_block) as f64 / block_sync_speed;
+            self.current_block = current_block;
+            self.total_block = total_block;
+            self.estimated_time_left = estimated_seconds.ceil() as u64;
+        }
         self.last_update = chrono::Local::now();
-        self
+        Ok(self)
     }
 }
 
@@ -153,21 +187,26 @@ impl UpdateToView for OverviewDashboardState {
                 self.network_send_speed / 1024.0 / 1024.0
             ));
         });
+        siv.call_on_name(names::SYNCING_PROGRESS, |view: &mut ProgressBar| {
+            view.set_value(
+                ((self.current_block as f64 / self.total_block as f64) * 100.0) as usize,
+            );
+        });
+        siv.call_on_name(names::CURRENT_BLOCK, |view: &mut TextView| {
+            view.set_content(format!("{}/{}", self.current_block, self.total_block));
+        });
+
+        siv.call_on_name(names::ESTIMATED_TIME_LEFT, |view: &mut TextView| {
+            view.set_content(format!("{}min", self.estimated_time_left.div_ceil(60)));
+        });
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct OverviewDashboardData {
-    pub current_block: u64,
-    pub total_block: u64,
-    // 0~1
-    pub syncing_progress: f64,
-    // In seconds
-    pub estimated_time_left: u64,
-
     pub inbound_peers: usize,
     pub outbound_peers: usize,
-    pub average_latency: usize,
+    pub average_latency: isize,
 
     pub cpu_percent: f64,
     pub ram_total: u64,
@@ -201,16 +240,6 @@ pub struct OverviewDashboardData {
 
 impl UpdateToView for OverviewDashboardData {
     fn update_to_view(&self, siv: &mut Cursive) {
-        siv.call_on_name(names::SYNCING_PROGRESS, |view: &mut ProgressBar| {
-            view.set_value((self.syncing_progress * 100.0) as usize);
-        });
-        siv.call_on_name(names::CURRENT_BLOCK, |view: &mut TextView| {
-            view.set_content(format!("{}/{}", self.current_block, self.total_block));
-        });
-
-        siv.call_on_name(names::ESTIMATED_TIME_LEFT, |view: &mut TextView| {
-            view.set_content(format!("{}min", self.estimated_time_left.div_ceil(60)));
-        });
         siv.call_on_name(names::CONNECTED_PEERS, |view: &mut TextView| {
             view.set_content(format!(
                 "{} ({} outbound / {} inbound)",
@@ -308,21 +337,12 @@ impl FetchData for OverviewDashboardData {
             .tx_pool_info()
             .with_context(|| anyhow!("Unable to get tx pool info"))?;
         let fs_stats = fs2::statvfs(std::env::current_exe()?)?;
-        let sync_state = client
-            .sync_state()
-            .with_context(|| anyhow!("Unable to get sync state"))?;
-
         let epoch_field = tip_header.inner.epoch.value();
         let mut system = System::new_all();
         system.refresh_cpu_usage();
         system.refresh_memory();
         let data = OverviewDashboardData {
-            current_block: tip_header.inner.number.value(),
-            total_block: sync_state.best_known_block_number.value(),
-            syncing_progress: (tip_header.inner.number.value() as f64
-                / sync_state.best_known_block_number.value() as f64),
-            estimated_time_left: 123,
-            average_latency: 123,
+            average_latency: -1,
             inbound_peers,
             outbound_peers,
             cpu_percent: system.global_cpu_usage() as f64,
@@ -340,7 +360,7 @@ impl FetchData for OverviewDashboardData {
             epoch_block_count: (epoch_field >> 40) & 0xffff,
             estimated_epoch_time: 0,
             average_block_time: 0,
-            difficulty: 0.0,
+            difficulty: -1.0,
             hash_rate: 0,
             average_fee_rate: -1.0,
         };
