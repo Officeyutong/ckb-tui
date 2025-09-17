@@ -1,5 +1,5 @@
+pub mod blockchain;
 pub mod overview;
-
 use anyhow::{Context, anyhow};
 use cursive::{
     Cursive,
@@ -11,7 +11,8 @@ use cursive_aligned_view::Alignable;
 use crate::components::{
     FetchData, UpdateToView,
     dashboard::{
-        names::{REFRESHING_LABEL, TITLE},
+        blockchain::blockchain_dashboard,
+        names::{MAIN_LAYOUT, REFRESHING_LABEL, TITLE},
         overview::basic_info_dashboard,
     },
 };
@@ -19,6 +20,7 @@ use crate::components::{
 mod names {
     pub const TITLE: &str = "dashboard_title";
     pub const REFRESHING_LABEL: &str = "dashboard_refreshing_label";
+    pub const MAIN_LAYOUT: &str = "dashboard_main_layout";
 }
 
 pub struct GeneralDashboardData {
@@ -60,8 +62,14 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
             .child(TextView::new(" ").center().with_name(REFRESHING_LABEL))
             .child(
                 LinearLayout::horizontal()
-                    .child(Button::new("Overview", |_| ()).fixed_width(15))
-                    .child(Button::new("Blockchain", |_| ()).fixed_width(15))
+                    .child(
+                        Button::new("Overview", |s| switch_panel(s, basic_info_dashboard()))
+                            .fixed_width(15),
+                    )
+                    .child(
+                        Button::new("Blockchain", |s| switch_panel(s, blockchain_dashboard()))
+                            .fixed_width(15),
+                    )
                     .child(Button::new("Mempool", |_| ()).fixed_width(15))
                     .child(Button::new("Peers", |_| ()).fixed_width(15))
                     .child(Button::new("Logs", |_| ()).fixed_width(15))
@@ -70,8 +78,16 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
             .child(basic_info_dashboard())
             .child(Panel::new(TextView::new(
                 "Press [Q] to quit, [Tab] to switch panels, [R] to refresh",
-            ))),
+            )))
+            .with_name(MAIN_LAYOUT),
     )
+}
+
+fn switch_panel(siv: &mut Cursive, panel: impl IntoBoxedView + 'static) {
+    siv.call_on_name(MAIN_LAYOUT, move |view: &mut LinearLayout| {
+        view.remove_child(3);
+        view.insert_child(3, panel);
+    });
 }
 
 pub fn set_loading(siv: &mut Cursive, loading: bool) {

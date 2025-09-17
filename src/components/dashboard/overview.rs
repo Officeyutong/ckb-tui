@@ -10,13 +10,12 @@ use sysinfo::{Disks, Networks, System};
 
 use crate::{
     components::{
-        FetchData, UpdateState, UpdateToView,
         dashboard::overview::names::{
             AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITING_TX, CONNECTED_PEERS,
             CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED, DISK_USAGE, EPOCH,
             ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK, PENDING_TX, PROPOSED_TX,
             RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
-        },
+        }, extract_epoch, FetchData, UpdateState, UpdateToView
     },
     utils::bar_chart::SimpleBarChart,
 };
@@ -66,10 +65,15 @@ pub struct OverviewDashboardState {
     pub client: CkbRpcClient,
     pub current_block: u64,
     pub total_block: u64,
-    // 0~1
-    // pub syncing_progress: f64,
     // In seconds
     pub estimated_time_left: u64,
+
+    pub epoch: u64,
+    pub epoch_block: u64,
+    pub epoch_block_count: u64,
+
+    pub estimated_epoch_time: f64,
+    pub average_block_time: f64,
 }
 
 impl OverviewDashboardState {
@@ -113,12 +117,17 @@ impl OverviewDashboardState {
             current_block: 0,
             estimated_time_left: 100,
             total_block: 1,
+            epoch: 0,
+            epoch_block: 0,
+            epoch_block_count: 1,
+            average_block_time: -1.0,
+            estimated_epoch_time: -1.0,
         }
     }
 }
 
 impl UpdateState for OverviewDashboardState {
-    fn update_state(mut self) -> anyhow::Result<Self> {
+    fn update_state(&mut self) -> anyhow::Result<()> {
         let mut system = System::new_all();
         system.refresh_cpu_usage();
         self.cpu_history
@@ -128,7 +137,8 @@ impl UpdateState for OverviewDashboardState {
             self.cpu_history.dequeue();
         }
         let now = chrono::Local::now();
-        let diff_secs = (now - self.last_update).num_seconds() as f64;
+        let diff_secs = ((now - self.last_update).num_milliseconds() as f64) / 1e3;
+        log::info!("diff secs={}", diff_secs);
 
         {
             let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk();
@@ -145,11 +155,11 @@ impl UpdateState for OverviewDashboardState {
             self.total_network_receive_bytes = receive;
             self.total_network_send_bytes = send;
         }
+        let tip_header = self
+            .client
+            .get_tip_header()
+            .with_context(|| anyhow!("Unable to get tip header"))?;
         {
-            let tip_header = self
-                .client
-                .get_tip_header()
-                .with_context(|| anyhow!("Unable to get tip header"))?;
             let sync_state = self
                 .client
                 .sync_state()
@@ -163,8 +173,26 @@ impl UpdateState for OverviewDashboardState {
             self.total_block = total_block;
             self.estimated_time_left = estimated_seconds.ceil() as u64;
         }
+        {
+            let epoch_field = tip_header.inner.epoch.value();
+            let (epoch, epoch_block, epoch_block_count) = extract_epoch(epoch_field);
+            // if epoch == self.epoch {
+            //     // Only update these fields when this check and last check are in the same epoch
+            //     let blocks_per_sec = (epoch_block - self.epoch_block) as f64 / diff_secs;
+            //     if blocks_per_sec > 0.0 {
+            //         log::info!("blocks per sec {}", blocks_per_sec);
+            //         self.average_block_time = 1.0 / blocks_per_sec;
+            //         self.estimated_epoch_time =
+            //             (epoch_block_count - epoch_block) as f64 / blocks_per_sec;
+            //     }
+            // }
+
+            self.epoch = epoch;
+            self.epoch_block = epoch_block;
+            self.epoch_block_count = epoch_block_count;
+        }
         self.last_update = chrono::Local::now();
-        Ok(self)
+        Ok(())
     }
 }
 
@@ -199,6 +227,18 @@ impl UpdateToView for OverviewDashboardState {
         siv.call_on_name(names::ESTIMATED_TIME_LEFT, |view: &mut TextView| {
             view.set_content(format!("{}min", self.estimated_time_left.div_ceil(60)));
         });
+        siv.call_on_name(names::EPOCH, |view: &mut TextView| {
+            view.set_content(format!(
+                "{} ({}/{})",
+                self.epoch, self.epoch_block, self.epoch_block_count
+            ));
+        });
+        siv.call_on_name(names::ESTIMATED_EPOCH_TIME, |view: &mut TextView| {
+            view.set_content(format!("{}min", (self.estimated_epoch_time / 60.0).ceil()));
+        });
+        siv.call_on_name(names::AVERAGE_BLOCK_TIME, |view: &mut TextView| {
+            view.set_content(format!("{}s", self.average_block_time));
+        });
     }
 }
 
@@ -220,17 +260,6 @@ pub struct OverviewDashboardData {
     pub tx_rejected: u64,
     // in Bytes
     pub total_pool_size: u64,
-
-    pub epoch: u64,
-    pub epoch_block: u64,
-    pub epoch_block_count: u64,
-
-    // In seconds
-    pub estimated_epoch_time: u64,
-
-    // In seconds
-    pub average_block_time: u64,
-
     pub difficulty: f64,
     pub hash_rate: u64,
 
@@ -250,19 +279,6 @@ impl UpdateToView for OverviewDashboardData {
         });
         siv.call_on_name(names::AVERAGE_LATENCY, |view: &mut TextView| {
             view.set_content(format!("{}ms", self.average_latency));
-        });
-
-        siv.call_on_name(names::EPOCH, |view: &mut TextView| {
-            view.set_content(format!(
-                "{} ({}/{})",
-                self.epoch, self.epoch_block, self.epoch_block_count
-            ));
-        });
-        siv.call_on_name(names::ESTIMATED_EPOCH_TIME, |view: &mut TextView| {
-            view.set_content(format!("{}min", self.estimated_epoch_time.div_ceil(60)));
-        });
-        siv.call_on_name(names::AVERAGE_BLOCK_TIME, |view: &mut TextView| {
-            view.set_content(format!("{}s", self.average_block_time));
         });
 
         siv.call_on_name(names::DIFFICULTY, |view: &mut TextView| {
@@ -330,14 +346,11 @@ impl FetchData for OverviewDashboardData {
             .collect::<Vec<_>>();
         let outbound_peers = peers.iter().filter(|x| **x).count();
         let inbound_peers = peers.len() - outbound_peers;
-        let tip_header = client
-            .get_tip_header()
-            .with_context(|| anyhow!("Unable to get tip header"))?;
         let tx_pool_info = client
             .tx_pool_info()
             .with_context(|| anyhow!("Unable to get tx pool info"))?;
         let fs_stats = fs2::statvfs(std::env::current_exe()?)?;
-        let epoch_field = tip_header.inner.epoch.value();
+
         let mut system = System::new_all();
         system.refresh_cpu_usage();
         system.refresh_memory();
@@ -355,11 +368,6 @@ impl FetchData for OverviewDashboardData {
             tx_commiting: 0,
             tx_rejected: 0,
             total_pool_size: tx_pool_info.total_tx_size.value(),
-            epoch: epoch_field & 0xffffff,
-            epoch_block: (epoch_field >> 24) & 0xffff,
-            epoch_block_count: (epoch_field >> 40) & 0xffff,
-            estimated_epoch_time: 0,
-            average_block_time: 0,
             difficulty: -1.0,
             hash_rate: 0,
             average_fee_rate: -1.0,

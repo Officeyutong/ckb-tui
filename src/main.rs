@@ -15,7 +15,9 @@ use cursive_async_view::AsyncView;
 use crate::components::{
     FetchData, UpdateState, UpdateToView,
     dashboard::{
-        GeneralDashboardData, dashboard,
+        GeneralDashboardData,
+        blockchain::BlockchainDashboardData,
+        dashboard,
         overview::{OverviewDashboardData, OverviewDashboardState},
         set_loading,
     },
@@ -37,6 +39,7 @@ struct Args {
 }
 
 fn main() -> anyhow::Result<()> {
+    cursive::logger::set_filter_levels_from_env();
     cursive::logger::init();
     let args = Args::parse();
     let client = CkbRpcClient::new(&args.rpc_url);
@@ -53,15 +56,20 @@ fn main() -> anyhow::Result<()> {
         std::thread::spawn(move || {
             let client_cloned = client.clone();
             cb_sink
-                .send(Box::new(
-                    move |siv| match GeneralDashboardData::fetch_data_through_client(&client_cloned)
-                    {
+                .send(Box::new(move |siv| {
+                    match GeneralDashboardData::fetch_data_through_client(&client_cloned) {
                         Ok(result) => {
                             result.update_to_view(siv);
                         }
                         Err(_) => {}
-                    },
-                ))
+                    };
+                    match BlockchainDashboardData::fetch_data_through_client(&client_cloned) {
+                        Ok(result) => {
+                            result.update_to_view(siv);
+                        }
+                        Err(_) => {}
+                    }
+                }))
                 .unwrap();
 
             loop {
@@ -69,15 +77,25 @@ fn main() -> anyhow::Result<()> {
                     SyncRequest::Stop => break,
                     SyncRequest::RequestSync { pop_layer_at_end } => {
                         loading_variable.store(true, std::sync::atomic::Ordering::SeqCst);
-                        let data = OverviewDashboardData::fetch_data_through_client(&client);
-
+                        let data_basic = OverviewDashboardData::fetch_data_through_client(&client);
+                        let data_blockchain =
+                            BlockchainDashboardData::fetch_data_through_client(&client);
                         cb_sink
                             .send(Box::new(move |siv: &mut Cursive| {
                                 if pop_layer_at_end {
                                     siv.pop_layer();
                                 }
-                                match data {
-                                    Ok(o) => o.update_to_view(siv),
+
+                                let result: anyhow::Result<(
+                                    OverviewDashboardData,
+                                    BlockchainDashboardData,
+                                )> = (move || Ok((data_basic?, data_blockchain?)))();
+
+                                match result {
+                                    Ok((o1, o2)) => {
+                                        o1.update_to_view(siv);
+                                        o2.update_to_view(siv);
+                                    }
                                     Err(err) => {
                                         siv.add_layer(
                                             Dialog::around(TextView::new(format!("{}", err)))
@@ -127,11 +145,8 @@ fn main() -> anyhow::Result<()> {
                 cb_sink
                     .send(Box::new(|siv| set_loading(siv, true)))
                     .unwrap();
-                let old_overview_state = overview_state.clone();
                 match overview_state.update_state() {
-                    Ok(o) => {
-                        overview_state = o;
-                    }
+                    Ok(_) => {}
                     Err(e) => {
                         cb_sink
                             .send(Box::new(move |siv| {
@@ -146,7 +161,6 @@ fn main() -> anyhow::Result<()> {
                                 )
                             }))
                             .unwrap();
-                        overview_state = old_overview_state;
                     }
                 };
                 let overview_state = overview_state.clone();

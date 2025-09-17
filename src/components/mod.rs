@@ -12,5 +12,12 @@ pub trait FetchData: Sized {
 }
 
 pub trait UpdateState: Sized {
-    fn update_state(self) -> anyhow::Result<Self>;
+    fn update_state(&mut self) -> anyhow::Result<()>;
+}
+
+pub fn extract_epoch(epoch_field: u64) -> (u64, u64, u64) {
+    let epoch = epoch_field & 0xffffff;
+    let epoch_block = (epoch_field >> 24) & 0xffff;
+    let epoch_block_count = (epoch_field >> 40) & 0xffff;
+    (epoch, epoch_block, epoch_block_count)
 }
