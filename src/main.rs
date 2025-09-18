@@ -16,7 +16,7 @@ use crate::components::{
     DashboardData, DashboardState, UpdateToView,
     dashboard::{
         GeneralDashboardData,
-        blockchain::BlockchainDashboardData,
+        blockchain::{BlockchainDashboardData, BlockchainDashboardState},
         dashboard,
         overview::{OverviewDashboardData, OverviewDashboardState},
         set_loading,
@@ -141,11 +141,19 @@ fn main() -> anyhow::Result<()> {
         let cb_sink = siv.cb_sink().clone();
         std::thread::spawn(move || {
             let mut overview_state = OverviewDashboardState::new(client.clone());
+            let mut blockchain_state = BlockchainDashboardState::new(client.clone());
+
             loop {
                 cb_sink
                     .send(Box::new(|siv| set_loading(siv, true)))
                     .unwrap();
-                match overview_state.update_state() {
+                let result = (|| {
+                    anyhow::Ok((
+                        overview_state.update_state()?,
+                        blockchain_state.update_state()?,
+                    ))
+                })();
+                match result {
                     Ok(_) => {}
                     Err(e) => {
                         cb_sink
@@ -164,8 +172,13 @@ fn main() -> anyhow::Result<()> {
                     }
                 };
                 let overview_state = overview_state.clone();
+                let blockchain_state = blockchain_state.clone();
+                
                 cb_sink
-                    .send(Box::new(move |siv| overview_state.update_to_view(siv)))
+                    .send(Box::new(move |siv| {
+                        overview_state.update_to_view(siv);
+                        blockchain_state.update_to_view(siv);
+                    }))
                     .unwrap();
 
                 tx.send(SyncRequest::RequestSync {

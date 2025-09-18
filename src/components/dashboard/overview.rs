@@ -140,7 +140,6 @@ impl DashboardState for OverviewDashboardState {
         }
         let now = chrono::Local::now();
         let diff_secs = ((now - self.last_update).num_milliseconds() as f64) / 1e3;
-        log::info!("diff secs={}", diff_secs);
 
         {
             let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk();

@@ -11,6 +11,7 @@ clap = { version = "4.5.46", features = ["derive"] }
 cursive = "0.21.1"
 cursive-aligned-view = "0.7.0"
 cursive-async-view = "0.8.0"
+cursive_table_view = "0.15.0"
 fs2 = "0.4.3"
 log = "0.4.27"
 queue = "0.3.1"

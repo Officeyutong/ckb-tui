@@ -10,8 +10,8 @@ const STEP: f64 = 0.125;
 
 impl SimpleBarChart {
     pub fn set_data(&mut self, new_data: &[f64]) -> anyhow::Result<()> {
-        if new_data.iter().any(|x| *x < 0.0 || *x > 1.0) {
-            bail!("Invalid data, all numbers must be in range [0,1]");
+        if new_data.iter().any(|x| *x < 0.0 ) {
+            bail!("Invalid data, all numbers must be in range [0, inf)");
         }
         self.data = new_data.to_vec();
         Ok(())
@@ -50,10 +50,8 @@ impl View for SimpleBarChart {
                 '▆'
             } else if item > STEP * 6.0 && item <= STEP * 7.0 {
                 '▇'
-            } else if item > STEP * 7.0 && item <= STEP * 8.0 {
-                '█'
             } else {
-                unreachable!()
+                '█'
             };
             str.push(char);
         }
