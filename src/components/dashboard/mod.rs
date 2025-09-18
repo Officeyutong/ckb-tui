@@ -9,7 +9,7 @@ use cursive::{
 use cursive_aligned_view::Alignable;
 
 use crate::components::{
-    FetchData, UpdateToView,
+    DashboardData, UpdateToView,
     dashboard::{
         blockchain::blockchain_dashboard,
         names::{MAIN_LAYOUT, REFRESHING_LABEL, TITLE},
@@ -38,7 +38,7 @@ impl UpdateToView for GeneralDashboardData {
     }
 }
 
-impl FetchData for GeneralDashboardData {
+impl DashboardData for GeneralDashboardData {
     fn fetch_data_through_client(client: &ckb_sdk::CkbRpcClient) -> anyhow::Result<Self> {
         let block_chain_info = client
             .get_blockchain_info()

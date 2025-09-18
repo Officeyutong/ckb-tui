@@ -10,12 +10,14 @@ use sysinfo::{Disks, Networks, System};
 
 use crate::{
     components::{
+        DashboardData, DashboardState, UpdateToView,
         dashboard::overview::names::{
             AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITING_TX, CONNECTED_PEERS,
             CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED, DISK_USAGE, EPOCH,
             ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK, PENDING_TX, PROPOSED_TX,
             RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
-        }, extract_epoch, FetchData, UpdateState, UpdateToView
+        },
+        extract_epoch,
     },
     utils::bar_chart::SimpleBarChart,
 };
@@ -126,7 +128,7 @@ impl OverviewDashboardState {
     }
 }
 
-impl UpdateState for OverviewDashboardState {
+impl DashboardState for OverviewDashboardState {
     fn update_state(&mut self) -> anyhow::Result<()> {
         let mut system = System::new_all();
         system.refresh_cpu_usage();
@@ -336,7 +338,7 @@ impl UpdateToView for OverviewDashboardData {
         });
     }
 }
-impl FetchData for OverviewDashboardData {
+impl DashboardData for OverviewDashboardData {
     fn fetch_data_through_client(client: &CkbRpcClient) -> anyhow::Result<Self> {
         let peers = client
             .get_peers()
@@ -350,6 +352,9 @@ impl FetchData for OverviewDashboardData {
             .tx_pool_info()
             .with_context(|| anyhow!("Unable to get tx pool info"))?;
         let fs_stats = fs2::statvfs(std::env::current_exe()?)?;
+        let fee_rate_statistics = client
+            .get_fee_rate_statistics(None)
+            .with_context(|| anyhow!("Unable to get fee rate statistics"))?;
 
         let mut system = System::new_all();
         system.refresh_cpu_usage();
@@ -370,7 +375,7 @@ impl FetchData for OverviewDashboardData {
             total_pool_size: tx_pool_info.total_tx_size.value(),
             difficulty: -1.0,
             hash_rate: 0,
-            average_fee_rate: -1.0,
+            average_fee_rate: fee_rate_statistics.unwrap().mean.value() as f64,
         };
 
         Ok(data)

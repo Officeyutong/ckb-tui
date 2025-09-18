@@ -7,11 +7,11 @@ pub trait UpdateToView {
     fn update_to_view(&self, siv: &mut Cursive);
 }
 
-pub trait FetchData: Sized {
+pub trait DashboardData: Sized + UpdateToView {
     fn fetch_data_through_client(client: &CkbRpcClient) -> anyhow::Result<Self>;
 }
 
-pub trait UpdateState: Sized {
+pub trait DashboardState: Sized + Clone + UpdateToView {
     fn update_state(&mut self) -> anyhow::Result<()>;
 }
 

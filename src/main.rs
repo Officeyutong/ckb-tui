@@ -13,7 +13,7 @@ use cursive::{
 use cursive_async_view::AsyncView;
 
 use crate::components::{
-    FetchData, UpdateState, UpdateToView,
+    DashboardData, DashboardState, UpdateToView,
     dashboard::{
         GeneralDashboardData,
         blockchain::BlockchainDashboardData,

@@ -1,11 +1,13 @@
 use anyhow::{Context, anyhow};
+use ckb_sdk::{CkbRpcClient, rpc::ckb_indexer::SearchKey};
 use cursive::{
     view::{IntoBoxedView, Nameable, Resizable},
     views::{LinearLayout, Panel, TextView},
 };
+use queue::Queue;
 
 use crate::components::{
-    FetchData, UpdateToView,
+    DashboardData, DashboardState, UpdateToView,
     dashboard::blockchain::names::{
         ALGORITHM, AVERAGE_BLOCK_TIME, BLOCK_HEIGHT, DIFFICULTY, EPOCH, ESTIMATED_EPOCH_TIME,
         HASH_RATE,
@@ -23,7 +25,35 @@ mod names {
     pub const HASH_RATE: &str = "blockchain_dashboard_hash_rate";
 }
 
-pub struct BlockchainDashboardState {}
+#[derive(Clone)]
+pub struct BlockchainDashboardState {
+    live_cells_history: Queue<f64>,
+    max_live_cells: u64,
+    live_cells: u64,
+
+    client: CkbRpcClient,
+}
+
+impl UpdateToView for BlockchainDashboardState {
+    fn update_to_view(&self, _siv: &mut cursive::Cursive) {}
+}
+
+impl DashboardState for BlockchainDashboardState {
+    fn update_state(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+impl BlockchainDashboardState {
+    pub fn new(client: CkbRpcClient) -> Self {
+        Self {
+            client,
+            live_cells: 1,
+            live_cells_history: Queue::default(),
+            max_live_cells: 1,
+        }
+    }
+}
 
 pub struct BlockchainDashboardData {
     epoch: u64,
@@ -38,13 +68,13 @@ pub struct BlockchainDashboardData {
     hash_rate: f64,
 }
 
-impl FetchData for BlockchainDashboardData {
+impl DashboardData for BlockchainDashboardData {
     fn fetch_data_through_client(client: &ckb_sdk::CkbRpcClient) -> anyhow::Result<Self> {
         let tip_header = client
             .get_tip_header()
             .with_context(|| anyhow!("Unable to get tip header"))?;
         let (epoch, epoch_block, epoch_block_count) = extract_epoch(tip_header.inner.epoch.value());
-
+        // let scripts =client.
         Ok(Self {
             epoch,
             epoch_block,

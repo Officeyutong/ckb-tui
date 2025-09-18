@@ -3,6 +3,7 @@ use cursive::View;
 
 pub struct SimpleBarChart {
     data: Vec<f64>,
+    max_value: f64,
 }
 
 const STEP: f64 = 0.125;
@@ -15,9 +16,13 @@ impl SimpleBarChart {
         self.data = new_data.to_vec();
         Ok(())
     }
+    pub fn set_max_value(&mut self, max_value: f64) {
+        self.max_value = max_value;
+    }
     pub fn new(data: &[f64]) -> anyhow::Result<Self> {
         let mut new_inst = Self {
             data: Default::default(),
+            max_value: 1.0,
         };
         new_inst.set_data(data)?;
         Ok(new_inst)
@@ -28,7 +33,7 @@ impl View for SimpleBarChart {
     fn draw(&self, printer: &cursive::Printer) {
         let mut str = String::default();
         for item in self.data.iter() {
-            let item = *item;
+            let item = *item / self.max_value;
             let char = if item == STEP * 0.0 {
                 ' '
             } else if item > STEP * 0.0 && item <= STEP * 1.0 {
