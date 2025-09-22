@@ -4,6 +4,7 @@ use cursive::{
     view::{IntoBoxedView, Nameable, Resizable},
     views::{LinearLayout, NamedView, Panel, TextView},
 };
+use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
         dashboard::blockchain::names::{
             ALGORITHM, AVERAGE_BLOCK_TIME, BLOCK_HEIGHT, DIFFICULTY, EPOCH, ESTIMATED_EPOCH_TIME,
             HASH_RATE, LIVE_CELLS, LIVE_CELLS_HISTORY, OCCUPIED_CAPACITY,
-            OCCUPIED_CAPACITY_HISTORY,
+            OCCUPIED_CAPACITY_HISTORY, SCRIPT_TABLE,
         },
         extract_epoch,
     },
@@ -34,6 +35,7 @@ mod names {
     pub const LIVE_CELLS_HISTORY: &str = "blockchain_dashboard_live_cells_history";
     pub const OCCUPIED_CAPACITY: &str = "blockchain_dashboard_occupied_capacity";
     pub const OCCUPIED_CAPACITY_HISTORY: &str = "blockchain_dashboard_occupied_capacity_history";
+    pub const SCRIPT_TABLE: &str = "blockchain_dashboard_script_table";
 }
 
 #[derive(Clone)]
@@ -87,6 +89,56 @@ impl BlockchainDashboardState {
         }
     }
 }
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
+enum ScriptType {
+    Lock,
+    Type,
+}
+
+#[derive(Clone)]
+struct ScriptItem {
+    name: String,
+    script_type: ScriptType,
+    integrity: Result<(), String>,
+    code_hash: String,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub enum ScriptColumn {
+    Name,
+    ScriptType,
+    Integrity,
+    CodeHash,
+}
+
+impl TableViewItem<ScriptColumn> for ScriptItem {
+    fn to_column(&self, column: ScriptColumn) -> String {
+        match column {
+            ScriptColumn::Name => self.name.clone(),
+            ScriptColumn::ScriptType => match self.script_type {
+                ScriptType::Lock => String::from("Lock"),
+                ScriptType::Type => String::from("Type"),
+            },
+            ScriptColumn::Integrity => match &self.integrity {
+                Ok(_) => String::from("✓ OK"),
+                Err(e) => e.clone(),
+            },
+            ScriptColumn::CodeHash => self.code_hash.clone(),
+        }
+    }
+
+    fn cmp(&self, other: &Self, column: ScriptColumn) -> std::cmp::Ordering
+    where
+        Self: Sized,
+    {
+        match column {
+            ScriptColumn::Name => self.name.cmp(&other.name),
+            ScriptColumn::ScriptType => self.script_type.cmp(&other.script_type),
+            ScriptColumn::Integrity => self.integrity.cmp(&other.integrity),
+            ScriptColumn::CodeHash => self.code_hash.cmp(&other.code_hash),
+        }
+    }
+}
 
 pub struct BlockchainDashboardData {
     epoch: u64,
@@ -99,6 +151,8 @@ pub struct BlockchainDashboardData {
     algorithm: String,
     difficulty: f64,
     hash_rate: f64,
+
+    scripts: Vec<ScriptItem>,
 }
 
 impl DashboardData for BlockchainDashboardData {
@@ -107,6 +161,23 @@ impl DashboardData for BlockchainDashboardData {
             .get_tip_header()
             .with_context(|| anyhow!("Unable to get tip header"))?;
         let (epoch, epoch_block, epoch_block_count) = extract_epoch(tip_header.inner.epoch.value());
+
+        let scripts = {
+            let mut scripts = vec![];
+            for i in 0..20 {
+                scripts.push(ScriptItem {
+                    name: format!("Script {}", i),
+                    script_type: if i % 2 == 0 {
+                        ScriptType::Lock
+                    } else {
+                        ScriptType::Type
+                    },
+                    integrity: Ok(()),
+                    code_hash: format!("Code Hash {}", i),
+                });
+            }
+            scripts
+        };
         Ok(Self {
             epoch,
             epoch_block,
@@ -117,6 +188,7 @@ impl DashboardData for BlockchainDashboardData {
             algorithm: "Unknown".to_string(),
             difficulty: -1.0,
             hash_rate: -1.0,
+            scripts,
         })
     }
 }
@@ -148,6 +220,15 @@ impl UpdateToView for BlockchainDashboardData {
         siv.call_on_name(HASH_RATE, |view: &mut TextView| {
             view.set_content(format!("{:.2} PH/s", self.hash_rate));
         });
+        siv.call_on_name(
+            SCRIPT_TABLE,
+            |view: &mut TableView<ScriptItem, ScriptColumn>| {
+                view.clear();
+                for i in 0..self.scripts.len() {
+                    view.insert_item(self.scripts[i].clone());
+                }
+            },
+        );
     }
 }
 
@@ -233,6 +314,20 @@ pub fn blockchain_dashboard() -> impl IntoBoxedView + use<> {
                             OCCUPIED_CAPACITY_HISTORY,
                             SimpleBarChart::new(&TEST_DATA).unwrap(),
                         )),
+                ),
+        ))
+        .child(Panel::new(
+            LinearLayout::vertical()
+                .child(TextView::new("[Script Integrity]"))
+                .child(TextView::new(" "))
+                .child(
+                    TableView::<ScriptItem, ScriptColumn>::new()
+                        .column(ScriptColumn::Name, "System Script Name", |c| c)
+                        .column(ScriptColumn::ScriptType, "Lock/Type Script", |c| c)
+                        .column(ScriptColumn::Integrity, "Integrity Check", |c| c)
+                        .column(ScriptColumn::CodeHash, "Code Hash", |c| c)
+                        .with_name(SCRIPT_TABLE)
+                        .min_size((50, 20)),
                 ),
         ))
 }
