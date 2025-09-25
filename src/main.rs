@@ -34,7 +34,7 @@ enum SyncRequest {
 #[command(version, about, long_about = None)]
 struct Args {
     /// RPC endpoint of CKB node
-    #[arg(short, long, default_value_t = String::from("http://127.0.0.1:8114"))]
+    #[arg(short, long, default_value_t = String::from("https://testnet.ckb.dev/"))]
     rpc_url: String,
 }
 
