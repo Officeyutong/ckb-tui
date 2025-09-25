@@ -98,7 +98,7 @@ fn main() -> anyhow::Result<()> {
                                     }
                                     Err(err) => {
                                         siv.add_layer(
-                                            Dialog::around(TextView::new(format!("{}", err)))
+                                            Dialog::around(TextView::new(format!("{:?}", err)))
                                                 .title("Error")
                                                 .button("Close", |s| {
                                                     s.pop_layer();
@@ -160,7 +160,7 @@ fn main() -> anyhow::Result<()> {
                             .send(Box::new(move |siv| {
                                 siv.add_layer(
                                     Dialog::around(TextView::new(format!(
-                                        "Unable to update state: {}",
+                                        "Unable to update state: {:?}",
                                         e
                                     )))
                                     .button("Ok", |siv| {
