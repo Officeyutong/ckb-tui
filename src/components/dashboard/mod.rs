@@ -1,4 +1,5 @@
 pub mod blockchain;
+pub mod mempool;
 pub mod overview;
 use anyhow::{Context, anyhow};
 use cursive::{
@@ -12,6 +13,7 @@ use crate::components::{
     DashboardData, UpdateToView,
     dashboard::{
         blockchain::blockchain_dashboard,
+        mempool::mempool_dashboard,
         names::{MAIN_LAYOUT, REFRESHING_LABEL, TITLE},
         overview::basic_info_dashboard,
     },
@@ -70,7 +72,10 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
                         Button::new("Blockchain", |s| switch_panel(s, blockchain_dashboard()))
                             .fixed_width(15),
                     )
-                    .child(Button::new("Mempool", |_| ()).fixed_width(15))
+                    .child(
+                        Button::new("Mempool", |s| switch_panel(s, mempool_dashboard()))
+                            .fixed_width(15),
+                    )
                     .child(Button::new("Peers", |_| ()).fixed_width(15))
                     .child(Button::new("Logs", |_| ()).fixed_width(15))
                     .align_center(),
