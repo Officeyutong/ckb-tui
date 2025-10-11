@@ -9,6 +9,7 @@ use cursive::{
 use sysinfo::{Disks, Networks, System};
 
 use crate::{
+    CURRENT_TAB,
     components::{
         DashboardData, DashboardState, UpdateToView,
         dashboard::overview::names::{
@@ -19,33 +20,36 @@ use crate::{
         },
         extract_epoch,
     },
+    declare_names, update_text,
     utils::bar_chart::SimpleBarChart,
 };
 
-mod names {
-    pub const CURRENT_BLOCK: &str = "overview_dashboard_current_block";
-    pub const SYNCING_PROGRESS: &str = "overview_dashboard_syncing_progress";
-    pub const ESTIMATED_TIME_LEFT: &str = "overview_dashboard_estimated_time_left";
-    pub const CONNECTED_PEERS: &str = "overview_dashboard_connected_peers";
-    pub const AVERAGE_LATENCY: &str = "overview_dashboard_average_latency";
-    pub const CPU: &str = "overview_dashboard_cpu";
-    pub const RAM: &str = "overview_dashboard_ram";
-    pub const DISK_USAGE: &str = "overview_dashboard_disk";
-    pub const EPOCH: &str = "overview_dashboard_epoch";
-    pub const ESTIMATED_EPOCH_TIME: &str = "overview_dashboard_estimated_epoch_time";
-    pub const AVERAGE_BLOCK_TIME: &str = "overview_dashboard_average_block_time";
-    pub const DIFFICULTY: &str = "overview_dashboard_difficulty";
-    pub const HASH_RATE: &str = "overview_dashboard_hash_rate";
-    pub const TOTAL_POOL_SIZE: &str = "overview_dashboard_total_pool_size";
-    pub const PENDING_TX: &str = "overview_dashboard_pending_tx";
-    pub const PROPOSED_TX: &str = "overview_dashboard_proposed_tx";
-    pub const COMMITING_TX: &str = "overview_dashboard_commiting_tx";
-    pub const REJECTED_TX: &str = "overview_dashboard_rejected_tx";
-    pub const CPU_HISTORY: &str = "overview_dashboard_cpu_history";
-    pub const DISK_SPEED: &str = "overview_dashboard_disk_speed";
-    pub const AVERAGE_FEE_RATE: &str = "overview_dashboard_average_fee_rate";
-    pub const NETWORK: &str = "overview_dashboard_network";
-}
+declare_names!(
+    names,
+    "overview_dashboard_",
+    CURRENT_BLOCK,
+    SYNCING_PROGRESS,
+    ESTIMATED_TIME_LEFT,
+    CONNECTED_PEERS,
+    AVERAGE_LATENCY,
+    CPU,
+    RAM,
+    DISK_USAGE,
+    EPOCH,
+    ESTIMATED_EPOCH_TIME,
+    AVERAGE_BLOCK_TIME,
+    DIFFICULTY,
+    HASH_RATE,
+    TOTAL_POOL_SIZE,
+    PENDING_TX,
+    PROPOSED_TX,
+    COMMITING_TX,
+    REJECTED_TX,
+    CPU_HISTORY,
+    DISK_SPEED,
+    AVERAGE_FEE_RATE,
+    NETWORK
+);
 #[derive(Clone)]
 pub struct OverviewDashboardState {
     pub cpu_history: queue::Queue<f64>,
@@ -177,16 +181,6 @@ impl DashboardState for OverviewDashboardState {
         {
             let epoch_field = tip_header.inner.epoch.value();
             let (epoch, epoch_block, epoch_block_count) = extract_epoch(epoch_field);
-            // if epoch == self.epoch {
-            //     // Only update these fields when this check and last check are in the same epoch
-            //     let blocks_per_sec = (epoch_block - self.epoch_block) as f64 / diff_secs;
-            //     if blocks_per_sec > 0.0 {
-            //         log::info!("blocks per sec {}", blocks_per_sec);
-            //         self.average_block_time = 1.0 / blocks_per_sec;
-            //         self.estimated_epoch_time =
-            //             (epoch_block_count - epoch_block) as f64 / blocks_per_sec;
-            //     }
-            // }
 
             self.epoch = epoch;
             self.epoch_block = epoch_block;
@@ -202,44 +196,58 @@ impl UpdateToView for OverviewDashboardState {
         siv.call_on_name(CPU_HISTORY, |view: &mut SimpleBarChart| {
             view.set_data(self.cpu_history.vec()).unwrap();
         });
-        siv.call_on_name(DISK_SPEED, |view: &mut TextView| {
-            view.set_content(format!(
+        update_text!(
+            siv,
+            DISK_SPEED,
+            format!(
                 "{:.1} MB/s (Read)   {:.1} MB/s (Write)",
                 self.disk_read_speed / 1024.0 / 1024.0,
                 self.disk_write_speed / 1024.0 / 1024.0
-            ));
-        });
-        siv.call_on_name(NETWORK, |view: &mut TextView| {
-            view.set_content(format!(
+            )
+        );
+        update_text!(
+            siv,
+            NETWORK,
+            format!(
                 "{:.1} MB/s (In)   {:.1} MB/s (Out)",
                 self.network_receive_speed / 1024.0 / 1024.0,
                 self.network_send_speed / 1024.0 / 1024.0
-            ));
-        });
+            )
+        );
         siv.call_on_name(names::SYNCING_PROGRESS, |view: &mut ProgressBar| {
             view.set_value(
                 ((self.current_block as f64 / self.total_block as f64) * 100.0) as usize,
             );
         });
-        siv.call_on_name(names::CURRENT_BLOCK, |view: &mut TextView| {
-            view.set_content(format!("{}/{}", self.current_block, self.total_block));
-        });
+        update_text!(
+            siv,
+            names::CURRENT_BLOCK,
+            format!("{}/{}", self.current_block, self.total_block)
+        );
 
-        siv.call_on_name(names::ESTIMATED_TIME_LEFT, |view: &mut TextView| {
-            view.set_content(format!("{}min", self.estimated_time_left.div_ceil(60)));
-        });
-        siv.call_on_name(names::EPOCH, |view: &mut TextView| {
-            view.set_content(format!(
+        update_text!(
+            siv,
+            names::ESTIMATED_TIME_LEFT,
+            format!("{}min", self.estimated_time_left.div_ceil(60))
+        );
+        update_text!(
+            siv,
+            names::EPOCH,
+            format!(
                 "{} ({}/{})",
                 self.epoch, self.epoch_block, self.epoch_block_count
-            ));
-        });
-        siv.call_on_name(names::ESTIMATED_EPOCH_TIME, |view: &mut TextView| {
-            view.set_content(format!("{}min", (self.estimated_epoch_time / 60.0).ceil()));
-        });
-        siv.call_on_name(names::AVERAGE_BLOCK_TIME, |view: &mut TextView| {
-            view.set_content(format!("{}s", self.average_block_time));
-        });
+            )
+        );
+        update_text!(
+            siv,
+            names::ESTIMATED_EPOCH_TIME,
+            format!("{}min", (self.estimated_epoch_time / 60.0).ceil())
+        );
+        update_text!(
+            siv,
+            names::AVERAGE_BLOCK_TIME,
+            format!("{}s", self.average_block_time)
+        );
     }
 }
 
@@ -260,7 +268,7 @@ pub struct OverviewDashboardData {
     pub tx_commiting: u64,
     pub tx_rejected: u64,
     // in Bytes
-    pub total_pool_size: u64,
+    pub total_pool_size: i64,
     pub difficulty: f64,
     pub hash_rate: u64,
 
@@ -270,74 +278,67 @@ pub struct OverviewDashboardData {
 
 impl UpdateToView for OverviewDashboardData {
     fn update_to_view(&self, siv: &mut Cursive) {
-        siv.call_on_name(names::CONNECTED_PEERS, |view: &mut TextView| {
-            view.set_content(format!(
+        update_text!(
+            siv,
+            names::CONNECTED_PEERS,
+            format!(
                 "{} ({} outbound / {} inbound)",
                 self.inbound_peers + self.outbound_peers,
                 self.outbound_peers,
                 self.inbound_peers
-            ));
-        });
-        siv.call_on_name(names::AVERAGE_LATENCY, |view: &mut TextView| {
-            view.set_content(format!("{}ms", self.average_latency));
-        });
-
-        siv.call_on_name(names::DIFFICULTY, |view: &mut TextView| {
-            view.set_content(format!("{:.2} EH", self.difficulty));
-        });
-
-        siv.call_on_name(names::HASH_RATE, |view: &mut TextView| {
-            view.set_content(format!("{:.2} PH/s", self.hash_rate));
-        });
-
-        siv.call_on_name(names::TOTAL_POOL_SIZE, |view: &mut TextView| {
-            view.set_content(format!(
+            )
+        );
+        update_text!(
+            siv,
+            names::AVERAGE_LATENCY,
+            format!("{}ms", self.average_latency)
+        );
+        update_text!(siv, names::DIFFICULTY, format!("{:.2} EH", self.difficulty));
+        update_text!(siv, names::HASH_RATE, format!("{:.2} PH/s", self.hash_rate));
+        update_text!(
+            siv,
+            names::TOTAL_POOL_SIZE,
+            format!(
                 "{} txs ({:.0} MB)",
                 self.tx_pending + self.tx_commiting + self.tx_proposed,
                 self.total_pool_size as f64 / 1024.0 / 1024.0
-            ));
-        });
-        siv.call_on_name(names::PENDING_TX, |view: &mut TextView| {
-            view.set_content(format!("{}", self.tx_pending));
-        });
-        siv.call_on_name(names::PROPOSED_TX, |view: &mut TextView| {
-            view.set_content(format!("{}", self.tx_proposed));
-        });
-        siv.call_on_name(names::COMMITING_TX, |view: &mut TextView| {
-            view.set_content(format!("{}", self.tx_commiting));
-        });
-        siv.call_on_name(names::REJECTED_TX, |view: &mut TextView| {
-            view.set_content(format!("{}", self.tx_rejected));
-        });
-
-        siv.call_on_name(names::PENDING_TX, |view: &mut TextView| {
-            view.set_content(format!("{}", self.tx_pending));
-        });
-
-        siv.call_on_name(names::CPU, |view: &mut TextView| {
-            view.set_content(format!("{:.1}%", self.cpu_percent));
-        });
-        siv.call_on_name(names::RAM, |view: &mut TextView| {
-            view.set_content(format!(
+            )
+        );
+        update_text!(siv, names::PENDING_TX, format!("{}", self.tx_pending));
+        update_text!(siv, names::PROPOSED_TX, format!("{}", self.tx_proposed));
+        update_text!(siv, names::COMMITING_TX, format!("{}", self.tx_commiting));
+        update_text!(siv, names::REJECTED_TX, format!("{}", self.tx_rejected));
+        update_text!(siv, names::CPU, format!("{:.1}%", self.cpu_percent));
+        update_text!(
+            siv,
+            names::RAM,
+            format!(
                 "{:.1}GB / {:.1}GB",
                 self.ram_used as f64 / 1024.0 / 1024.0 / 1024.0,
                 self.ram_total as f64 / 1024.0 / 1024.0 / 1024.0
-            ));
-        });
-        siv.call_on_name(names::DISK_USAGE, |view: &mut TextView| {
-            view.set_content(format!(
+            )
+        );
+        update_text!(
+            siv,
+            names::DISK_USAGE,
+            format!(
                 "{:.0}GB / {:.0}GB ({:.2}%)",
                 self.disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
                 self.disk_total as f64 / 1024.0 / 1024.0 / 1024.0,
                 (self.disk_used as f64 / self.disk_total as f64 * 100.0)
-            ));
-        });
-        siv.call_on_name(names::AVERAGE_FEE_RATE, |view: &mut TextView| {
-            view.set_content(format!("{} shannons/KB", self.average_fee_rate));
-        });
+            )
+        );
+        update_text!(
+            siv,
+            names::AVERAGE_FEE_RATE,
+            format!("{} shannons/KB", self.average_fee_rate)
+        );
     }
 }
 impl DashboardData for OverviewDashboardData {
+    fn should_update(&self) -> bool {
+        CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 0
+    }
     fn fetch_data_through_client(client: &CkbRpcClient) -> anyhow::Result<Self> {
         let peers = client
             .get_peers()
@@ -371,7 +372,7 @@ impl DashboardData for OverviewDashboardData {
             tx_proposed: tx_pool_info.proposed.value(),
             tx_commiting: 0,
             tx_rejected: 0,
-            total_pool_size: tx_pool_info.total_tx_size.value(),
+            total_pool_size: -1,
             difficulty: -1.0,
             hash_rate: 0,
             average_fee_rate: fee_rate_statistics.unwrap().mean.value() as f64,

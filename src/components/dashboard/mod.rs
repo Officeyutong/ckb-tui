@@ -9,13 +9,16 @@ use cursive::{
 };
 use cursive_aligned_view::Alignable;
 
-use crate::components::{
-    DashboardData, UpdateToView,
-    dashboard::{
-        blockchain::blockchain_dashboard,
-        mempool::mempool_dashboard,
-        names::{MAIN_LAYOUT, REFRESHING_LABEL, TITLE},
-        overview::basic_info_dashboard,
+use crate::{
+    CURRENT_TAB,
+    components::{
+        DashboardData, UpdateToView,
+        dashboard::{
+            blockchain::blockchain_dashboard,
+            mempool::mempool_dashboard,
+            names::{MAIN_LAYOUT, REFRESHING_LABEL, TITLE},
+            overview::basic_info_dashboard,
+        },
     },
 };
 
@@ -65,15 +68,15 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
             .child(
                 LinearLayout::horizontal()
                     .child(
-                        Button::new("Overview", |s| switch_panel(s, basic_info_dashboard()))
+                        Button::new("Overview", |s| switch_panel(s, basic_info_dashboard(), 0))
                             .fixed_width(15),
                     )
                     .child(
-                        Button::new("Blockchain", |s| switch_panel(s, blockchain_dashboard()))
+                        Button::new("Blockchain", |s| switch_panel(s, blockchain_dashboard(), 1))
                             .fixed_width(15),
                     )
                     .child(
-                        Button::new("Mempool", |s| switch_panel(s, mempool_dashboard()))
+                        Button::new("Mempool", |s| switch_panel(s, mempool_dashboard(), 2))
                             .fixed_width(15),
                     )
                     .child(Button::new("Peers", |_| ()).fixed_width(15))
@@ -88,11 +91,12 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
     )
 }
 
-fn switch_panel(siv: &mut Cursive, panel: impl IntoBoxedView + 'static) {
+fn switch_panel(siv: &mut Cursive, panel: impl IntoBoxedView + 'static, panel_index: usize) {
     siv.call_on_name(MAIN_LAYOUT, move |view: &mut LinearLayout| {
         view.remove_child(3);
         view.insert_child(3, panel);
     });
+    CURRENT_TAB.store(panel_index, std::sync::atomic::Ordering::SeqCst);
 }
 
 pub fn set_loading(siv: &mut Cursive, loading: bool) {

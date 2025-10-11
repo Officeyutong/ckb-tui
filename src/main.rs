@@ -1,5 +1,8 @@
 use std::{
-    sync::{Arc, atomic::AtomicBool},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize},
+    },
     time::Duration,
 };
 
@@ -18,10 +21,13 @@ use crate::components::{
         GeneralDashboardData,
         blockchain::{BlockchainDashboardData, BlockchainDashboardState},
         dashboard,
+        mempool::MempoolDashboardData,
         overview::{OverviewDashboardData, OverviewDashboardState},
         set_loading,
     },
 };
+
+pub static CURRENT_TAB: AtomicUsize = AtomicUsize::new(0);
 
 mod components;
 mod utils;
@@ -80,6 +86,8 @@ fn main() -> anyhow::Result<()> {
                         let data_basic = OverviewDashboardData::fetch_data_through_client(&client);
                         let data_blockchain =
                             BlockchainDashboardData::fetch_data_through_client(&client);
+                        let data_mempool = MempoolDashboardData::fetch_data_through_client(&client);
+
                         cb_sink
                             .send(Box::new(move |siv: &mut Cursive| {
                                 if pop_layer_at_end {
@@ -89,12 +97,20 @@ fn main() -> anyhow::Result<()> {
                                 let result: anyhow::Result<(
                                     OverviewDashboardData,
                                     BlockchainDashboardData,
-                                )> = (move || Ok((data_basic?, data_blockchain?)))();
+                                    MempoolDashboardData,
+                                )> = (move || Ok((data_basic?, data_blockchain?, data_mempool?)))();
 
                                 match result {
-                                    Ok((o1, o2)) => {
-                                        o1.update_to_view(siv);
-                                        o2.update_to_view(siv);
+                                    Ok((o1, o2, o3)) => {
+                                        if o1.should_update() {
+                                            o1.update_to_view(siv);
+                                        }
+                                        if o2.should_update() {
+                                            o2.update_to_view(siv);
+                                        }
+                                        if o3.should_update() {
+                                            o3.update_to_view(siv);
+                                        }
                                     }
                                     Err(err) => {
                                         siv.add_layer(
@@ -173,7 +189,7 @@ fn main() -> anyhow::Result<()> {
                 };
                 let overview_state = overview_state.clone();
                 let blockchain_state = blockchain_state.clone();
-                
+
                 cb_sink
                     .send(Box::new(move |siv| {
                         overview_state.update_to_view(siv);
