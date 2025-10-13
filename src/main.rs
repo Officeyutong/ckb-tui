@@ -23,6 +23,7 @@ use crate::components::{
         dashboard,
         mempool::MempoolDashboardData,
         overview::{OverviewDashboardData, OverviewDashboardState},
+        peers::PeersDashboardData,
         set_loading,
     },
 };
@@ -43,7 +44,13 @@ struct Args {
     #[arg(short, long, default_value_t = String::from("https://testnet.ckb.dev/"))]
     rpc_url: String,
 }
-
+fn try_fetch_data<T: DashboardData>(client: &CkbRpcClient) -> Option<anyhow::Result<T>> {
+    if T::should_update() {
+        Some(T::fetch_data_through_client(client))
+    } else {
+        None
+    }
+}
 fn main() -> anyhow::Result<()> {
     cursive::logger::set_filter_levels_from_env();
     cursive::logger::init();
@@ -83,11 +90,10 @@ fn main() -> anyhow::Result<()> {
                     SyncRequest::Stop => break,
                     SyncRequest::RequestSync { pop_layer_at_end } => {
                         loading_variable.store(true, std::sync::atomic::Ordering::SeqCst);
-                        let data_basic = OverviewDashboardData::fetch_data_through_client(&client);
-                        let data_blockchain =
-                            BlockchainDashboardData::fetch_data_through_client(&client);
-                        let data_mempool = MempoolDashboardData::fetch_data_through_client(&client);
-
+                        let data_basic = try_fetch_data::<OverviewDashboardData>(&client);
+                        let data_blockchain = try_fetch_data::<BlockchainDashboardData>(&client);
+                        let data_mempool = try_fetch_data::<MempoolDashboardData>(&client);
+                        let data_peers = try_fetch_data::<PeersDashboardData>(&client);
                         cb_sink
                             .send(Box::new(move |siv: &mut Cursive| {
                                 if pop_layer_at_end {
@@ -95,21 +101,32 @@ fn main() -> anyhow::Result<()> {
                                 }
 
                                 let result: anyhow::Result<(
-                                    OverviewDashboardData,
-                                    BlockchainDashboardData,
-                                    MempoolDashboardData,
-                                )> = (move || Ok((data_basic?, data_blockchain?, data_mempool?)))();
+                                    Option<OverviewDashboardData>,
+                                    Option<BlockchainDashboardData>,
+                                    Option<MempoolDashboardData>,
+                                    Option<PeersDashboardData>,
+                                )> = (move || {
+                                    Ok((
+                                        data_basic.transpose()?,
+                                        data_blockchain.transpose()?,
+                                        data_mempool.transpose()?,
+                                        data_peers.transpose()?,
+                                    ))
+                                })();
 
                                 match result {
-                                    Ok((o1, o2, o3)) => {
-                                        if o1.should_update() {
-                                            o1.update_to_view(siv);
+                                    Ok((o1, o2, o3, o4)) => {
+                                        if let Some(o) = o1 {
+                                            o.update_to_view(siv);
                                         }
-                                        if o2.should_update() {
-                                            o2.update_to_view(siv);
+                                        if let Some(o) = o2 {
+                                            o.update_to_view(siv);
                                         }
-                                        if o3.should_update() {
-                                            o3.update_to_view(siv);
+                                        if let Some(o) = o3 {
+                                            o.update_to_view(siv);
+                                        }
+                                        if let Some(o) = o4 {
+                                            o.update_to_view(siv);
                                         }
                                     }
                                     Err(err) => {

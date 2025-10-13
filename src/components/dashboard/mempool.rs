@@ -1,6 +1,7 @@
 use anyhow::Context;
 use anyhow::anyhow;
 use chrono::Local;
+use cursive::view::Scrollable;
 use cursive::{
     view::{IntoBoxedView, Nameable, Resizable},
     views::{LinearLayout, Panel, TextView},
@@ -83,7 +84,7 @@ impl DashboardData for MempoolDashboardData {
             }],
         })
     }
-    fn should_update(&self) -> bool {
+    fn should_update() -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 2
     }
 }
@@ -266,42 +267,50 @@ pub fn mempool_dashboard() -> impl IntoBoxedView + use<> {
                     .min_width(50),
                 ),
         )
-        .child(Panel::new(
-            LinearLayout::vertical()
-                .child(TextView::new("[Rejections - Session]"))
-                .child(
-                    LinearLayout::horizontal()
-                        .child(TextView::new("• Total Rejections:").min_width(20))
-                        .child(TextView::empty().with_name(TOTAL_REJECTION)),
-                )
-                .child(
-                    LinearLayout::horizontal()
-                        .child(TextView::new("• Rejection Rate:").min_width(20))
-                        .child(TextView::empty().with_name(REJECTION_RATE)),
-                )
-                .child(
-                    TableView::<RejectionItem, RejectionColumn>::new()
-                        .column(RejectionColumn::Reason, "Rejection Reason", |c| c)
-                        .column(RejectionColumn::Count, "Count", |c| c)
-                        .with_name(REJECTION_TABLE)
-                        .min_size((50, 20)),
-                ),
-        ))
-        .child(Panel::new(
-            LinearLayout::vertical()
-                .child(TextView::new("[Latest Incoming Transactions]"))
-                .child(
-                    TableView::<LatestIncomingTxItem, LatestIncomingTxColumn>::new()
-                        .column(LatestIncomingTxColumn::TxHash, "Tx Hash", |c| c)
-                        .column(LatestIncomingTxColumn::Time, "Time", |c| c)
-                        .column(LatestIncomingTxColumn::SizeInBytes, "Size (Bytes)", |c| c)
-                        .column(
-                            LatestIncomingTxColumn::FeeRate,
-                            "Fee Rate (shannons/kB)",
-                            |c| c,
-                        )
-                        .with_name(LATEST_INCOMING_TX_TABLE)
-                        .min_size((50, 20)),
-                ),
-        ))
+        .child(
+            Panel::new(
+                LinearLayout::vertical()
+                    .child(TextView::new("[Rejections - Session]"))
+                    .child(
+                        LinearLayout::horizontal()
+                            .child(TextView::new("• Total Rejections:").min_width(20))
+                            .child(TextView::empty().with_name(TOTAL_REJECTION)),
+                    )
+                    .child(
+                        LinearLayout::horizontal()
+                            .child(TextView::new("• Rejection Rate:").min_width(20))
+                            .child(TextView::empty().with_name(REJECTION_RATE)),
+                    )
+                    .child(TextView::new(" "))
+                    .child(
+                        TableView::<RejectionItem, RejectionColumn>::new()
+                            .column(RejectionColumn::Reason, "Rejection Reason", |c| c)
+                            .column(RejectionColumn::Count, "Count", |c| c)
+                            .with_name(REJECTION_TABLE)
+                            .min_size((50, 5)),
+                    ),
+            )
+            .scrollable(),
+        )
+        .child(
+            Panel::new(
+                LinearLayout::vertical()
+                    .child(TextView::new("[Latest Incoming Transactions]"))
+                    .child(TextView::new(" "))
+                    .child(
+                        TableView::<LatestIncomingTxItem, LatestIncomingTxColumn>::new()
+                            .column(LatestIncomingTxColumn::TxHash, "Tx Hash", |c| c)
+                            .column(LatestIncomingTxColumn::Time, "Time", |c| c)
+                            .column(LatestIncomingTxColumn::SizeInBytes, "Size (Bytes)", |c| c)
+                            .column(
+                                LatestIncomingTxColumn::FeeRate,
+                                "Fee Rate (shannons/kB)",
+                                |c| c,
+                            )
+                            .with_name(LATEST_INCOMING_TX_TABLE)
+                            .min_size((50, 5)),
+                    ),
+            )
+            .scrollable(),
+        )
 }

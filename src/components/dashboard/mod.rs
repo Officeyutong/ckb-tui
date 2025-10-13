@@ -1,6 +1,8 @@
 pub mod blockchain;
 pub mod mempool;
 pub mod overview;
+pub mod peers;
+
 use anyhow::{Context, anyhow};
 use cursive::{
     Cursive,
@@ -18,15 +20,13 @@ use crate::{
             mempool::mempool_dashboard,
             names::{MAIN_LAYOUT, REFRESHING_LABEL, TITLE},
             overview::basic_info_dashboard,
+            peers::peers,
         },
     },
+    declare_names,
 };
 
-mod names {
-    pub const TITLE: &str = "dashboard_title";
-    pub const REFRESHING_LABEL: &str = "dashboard_refreshing_label";
-    pub const MAIN_LAYOUT: &str = "dashboard_main_layout";
-}
+declare_names!(names, "dashboard_", TITLE, REFRESHING_LABEL, MAIN_LAYOUT);
 
 pub struct GeneralDashboardData {
     pub network_name: String,
@@ -79,7 +79,7 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
                         Button::new("Mempool", |s| switch_panel(s, mempool_dashboard(), 2))
                             .fixed_width(15),
                     )
-                    .child(Button::new("Peers", |_| ()).fixed_width(15))
+                    .child(Button::new("Peers", |s| switch_panel(s, peers(), 3)).fixed_width(15))
                     .child(Button::new("Logs", |_| ()).fixed_width(15))
                     .align_center(),
             )

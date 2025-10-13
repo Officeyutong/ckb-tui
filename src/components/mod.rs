@@ -9,7 +9,7 @@ pub trait UpdateToView {
 
 pub trait DashboardData: Sized + UpdateToView {
     fn fetch_data_through_client(client: &CkbRpcClient) -> anyhow::Result<Self>;
-    fn should_update(&self) -> bool {
+    fn should_update() -> bool {
         true
     }
 }

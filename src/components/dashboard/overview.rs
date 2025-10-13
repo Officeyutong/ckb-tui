@@ -336,7 +336,7 @@ impl UpdateToView for OverviewDashboardData {
     }
 }
 impl DashboardData for OverviewDashboardData {
-    fn should_update(&self) -> bool {
+    fn should_update() -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 0
     }
     fn fetch_data_through_client(client: &CkbRpcClient) -> anyhow::Result<Self> {

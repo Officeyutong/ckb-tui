@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use ckb_sdk::CkbRpcClient;
 use cursive::{
-    view::{IntoBoxedView, Nameable, Resizable},
+    view::{IntoBoxedView, Nameable, Resizable, Scrollable},
     views::{LinearLayout, NamedView, Panel, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
@@ -158,7 +158,7 @@ pub struct BlockchainDashboardData {
 }
 
 impl DashboardData for BlockchainDashboardData {
-    fn should_update(&self) -> bool {
+    fn should_update() -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
     fn fetch_data_through_client(client: &ckb_sdk::CkbRpcClient) -> anyhow::Result<Self> {
@@ -263,7 +263,8 @@ pub fn blockchain_dashboard() -> impl IntoBoxedView + use<> {
                                     .child(TextView::empty().with_name(AVERAGE_BLOCK_TIME)),
                             ),
                     )
-                    .min_width(50),
+                    .min_width(50)
+                    .scrollable(),
                 )
                 .child(
                     Panel::new(
@@ -285,51 +286,58 @@ pub fn blockchain_dashboard() -> impl IntoBoxedView + use<> {
                                     .child(TextView::empty().with_name(HASH_RATE)),
                             ),
                     )
-                    .min_width(50),
+                    .min_width(50)
+                    .scrollable(),
                 ),
         )
-        .child(Panel::new(
-            LinearLayout::vertical()
-                .child(TextView::new("[Cells]"))
-                .child(
-                    LinearLayout::horizontal()
-                        .child(TextView::new("• Live Cells:").min_width(22))
-                        .child(
-                            TextView::new("Loading...")
-                                .with_name(LIVE_CELLS)
-                                .min_width(20),
-                        )
-                        .child(NamedView::new(
-                            LIVE_CELLS_HISTORY,
-                            SimpleBarChart::new(&TEST_DATA).unwrap(),
-                        )),
-                )
-                .child(
-                    LinearLayout::horizontal()
-                        .child(TextView::new("• Occupied Capacity:").min_width(22))
-                        .child(
-                            TextView::new("Loading...")
-                                .with_name(OCCUPIED_CAPACITY)
-                                .min_width(20),
-                        )
-                        .child(NamedView::new(
-                            OCCUPIED_CAPACITY_HISTORY,
-                            SimpleBarChart::new(&TEST_DATA).unwrap(),
-                        )),
-                ),
-        ))
-        .child(Panel::new(
-            LinearLayout::vertical()
-                .child(TextView::new("[Script Integrity]"))
-                .child(TextView::new(" "))
-                .child(
-                    TableView::<ScriptItem, ScriptColumn>::new()
-                        .column(ScriptColumn::Name, "System Script Name", |c| c)
-                        .column(ScriptColumn::ScriptType, "Lock/Type Script", |c| c)
-                        .column(ScriptColumn::Integrity, "Integrity Check", |c| c)
-                        .column(ScriptColumn::CodeHash, "Code Hash", |c| c)
-                        .with_name(SCRIPT_TABLE)
-                        .min_size((50, 20)),
-                ),
-        ))
+        .child(
+            Panel::new(
+                LinearLayout::vertical()
+                    .child(TextView::new("[Cells]"))
+                    .child(
+                        LinearLayout::horizontal()
+                            .child(TextView::new("• Live Cells:").min_width(22))
+                            .child(
+                                TextView::new("Loading...")
+                                    .with_name(LIVE_CELLS)
+                                    .min_width(20),
+                            )
+                            .child(NamedView::new(
+                                LIVE_CELLS_HISTORY,
+                                SimpleBarChart::new(&TEST_DATA).unwrap(),
+                            )),
+                    )
+                    .child(
+                        LinearLayout::horizontal()
+                            .child(TextView::new("• Occupied Capacity:").min_width(22))
+                            .child(
+                                TextView::new("Loading...")
+                                    .with_name(OCCUPIED_CAPACITY)
+                                    .min_width(20),
+                            )
+                            .child(NamedView::new(
+                                OCCUPIED_CAPACITY_HISTORY,
+                                SimpleBarChart::new(&TEST_DATA).unwrap(),
+                            )),
+                    ),
+            )
+            .scrollable(),
+        )
+        .child(
+            Panel::new(
+                LinearLayout::vertical()
+                    .child(TextView::new("[Script Integrity]"))
+                    .child(TextView::new(" "))
+                    .child(
+                        TableView::<ScriptItem, ScriptColumn>::new()
+                            .column(ScriptColumn::Name, "System Script Name", |c| c)
+                            .column(ScriptColumn::ScriptType, "Lock/Type Script", |c| c)
+                            .column(ScriptColumn::Integrity, "Integrity Check", |c| c)
+                            .column(ScriptColumn::CodeHash, "Code Hash", |c| c)
+                            .with_name(SCRIPT_TABLE)
+                            .min_size((50, 20)),
+                    ),
+            )
+            .scrollable(),
+        )
 }
