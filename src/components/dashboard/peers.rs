@@ -1,4 +1,5 @@
 use anyhow::{Context, anyhow};
+use ckb_sdk::CkbRpcClient;
 use cursive::{
     theme::{BaseColor, ColorStyle},
     utils::markup::StyledString,
@@ -79,7 +80,7 @@ impl TableViewItem<PeersColumn> for PeersItem {
         }
     }
 }
-
+#[derive(Clone, Default)]
 pub struct PeersDashboardData {
     connections_in: usize,
     connections_out: usize,
@@ -131,10 +132,13 @@ impl UpdateToView for PeersDashboardData {
 }
 
 impl DashboardData for PeersDashboardData {
-    fn should_update() -> bool {
+    fn should_update(&self) -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 3
     }
-    fn fetch_data_through_client(client: &ckb_sdk::CkbRpcClient) -> anyhow::Result<Self> {
+    fn fetch_data_through_client(
+        &mut self,
+        client: &CkbRpcClient,
+    ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
         let peers = client
             .get_peers()
             .with_context(|| anyhow!("Unable to get peers"))?;
@@ -147,7 +151,7 @@ impl DashboardData for PeersDashboardData {
                 conn_in += 1;
             }
         });
-        Ok(Self {
+        *self = Self {
             connections_in: conn_in,
             connections_out: conn_out,
             peers: peers
@@ -168,7 +172,9 @@ impl DashboardData for PeersDashboardData {
                     warning: None,
                 })
                 .collect(),
-        })
+        };
+
+        Ok(Box::new(self.clone()))
     }
 }
 

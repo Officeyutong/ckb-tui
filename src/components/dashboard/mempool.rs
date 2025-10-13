@@ -1,6 +1,7 @@
 use anyhow::Context;
 use anyhow::anyhow;
 use chrono::Local;
+use ckb_sdk::CkbRpcClient;
 use cursive::view::Scrollable;
 use cursive::{
     view::{IntoBoxedView, Nameable, Resizable},
@@ -36,6 +37,7 @@ declare_names!(
     REJECTION_TABLE,
     LATEST_INCOMING_TX_TABLE
 );
+#[derive(Clone, Default)]
 pub struct MempoolDashboardData {
     total_pool_size_in_tx: u64,
     total_pool_size_in_bytes: usize,
@@ -53,14 +55,17 @@ pub struct MempoolDashboardData {
 }
 
 impl DashboardData for MempoolDashboardData {
-    fn fetch_data_through_client(client: &ckb_sdk::CkbRpcClient) -> anyhow::Result<Self> {
+    fn fetch_data_through_client(
+        &mut self,
+        client: &CkbRpcClient,
+    ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
         let tx_pool_info = client
             .tx_pool_info()
             .with_context(|| anyhow!("Unable to get tx pool info"))?;
         let fee_rate_statistics = client
             .get_fee_rate_statistics(None)
             .with_context(|| anyhow!("Unable to get fee rate statistics"))?;
-        Ok(Self {
+        *self = Self {
             total_pool_size_in_tx: tx_pool_info.total_tx_size.value(),
             total_pool_size_in_bytes: 0,
             pending_tx: tx_pool_info.pending.value(),
@@ -82,9 +87,10 @@ impl DashboardData for MempoolDashboardData {
                 time: chrono::Local::now(),
                 tx_hash: "111111".to_string(),
             }],
-        })
+        };
+        Ok(Box::new(self.clone()))
     }
-    fn should_update() -> bool {
+    fn should_update(&self) -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 2
     }
 }
@@ -137,7 +143,7 @@ impl UpdateToView for MempoolDashboardData {
         );
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct RejectionItem {
     reason: String,
     count: usize,

@@ -251,7 +251,7 @@ impl UpdateToView for OverviewDashboardState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OverviewDashboardData {
     pub inbound_peers: usize,
     pub outbound_peers: usize,
@@ -336,10 +336,13 @@ impl UpdateToView for OverviewDashboardData {
     }
 }
 impl DashboardData for OverviewDashboardData {
-    fn should_update() -> bool {
+    fn should_update(&self) -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 0
     }
-    fn fetch_data_through_client(client: &CkbRpcClient) -> anyhow::Result<Self> {
+    fn fetch_data_through_client(
+        &mut self,
+        client: &CkbRpcClient,
+    ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
         let peers = client
             .get_peers()
             .with_context(|| anyhow!("Unable to get peers"))?
@@ -359,7 +362,7 @@ impl DashboardData for OverviewDashboardData {
         let mut system = System::new_all();
         system.refresh_cpu_usage();
         system.refresh_memory();
-        let data = OverviewDashboardData {
+        *self = OverviewDashboardData {
             average_latency: -1,
             inbound_peers,
             outbound_peers,
@@ -378,7 +381,7 @@ impl DashboardData for OverviewDashboardData {
             average_fee_rate: fee_rate_statistics.unwrap().mean.value() as f64,
         };
 
-        Ok(data)
+        Ok(Box::new(self.clone()))
     }
 }
 

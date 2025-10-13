@@ -4,6 +4,7 @@ pub mod overview;
 pub mod peers;
 
 use anyhow::{Context, anyhow};
+use ckb_sdk::CkbRpcClient;
 use cursive::{
     Cursive,
     view::{IntoBoxedView, Nameable, Resizable},
@@ -27,7 +28,7 @@ use crate::{
 };
 
 declare_names!(names, "dashboard_", TITLE, REFRESHING_LABEL, MAIN_LAYOUT);
-
+#[derive(Clone, Default)]
 pub struct GeneralDashboardData {
     pub network_name: String,
     pub version: String,
@@ -44,19 +45,24 @@ impl UpdateToView for GeneralDashboardData {
 }
 
 impl DashboardData for GeneralDashboardData {
-    fn fetch_data_through_client(client: &ckb_sdk::CkbRpcClient) -> anyhow::Result<Self> {
+    fn fetch_data_through_client(
+        &mut self,
+        client: &CkbRpcClient,
+    ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
         let block_chain_info = client
             .get_blockchain_info()
             .with_context(|| anyhow!("Unable to get block chain info"))?;
 
-        Ok(Self {
+        *self = Self {
             network_name: match block_chain_info.chain.as_str() {
                 "ckb" => "[Meepo Mainnet]".to_string(),
                 "ckb_testnet" => "[Mirana Testnet]".to_string(),
                 s => format!("[{}]", s),
             },
             version: format!("unknown version"),
-        })
+        };
+
+        Ok(Box::new(self.clone()))
     }
 }
 

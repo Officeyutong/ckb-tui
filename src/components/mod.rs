@@ -7,9 +7,12 @@ pub trait UpdateToView {
     fn update_to_view(&self, siv: &mut Cursive);
 }
 
-pub trait DashboardData: Sized + UpdateToView {
-    fn fetch_data_through_client(client: &CkbRpcClient) -> anyhow::Result<Self>;
-    fn should_update() -> bool {
+pub trait DashboardData: UpdateToView {
+    fn fetch_data_through_client(
+        &mut self,
+        client: &CkbRpcClient,
+    ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>>;
+    fn should_update(&self) -> bool {
         true
     }
 }

@@ -44,13 +44,7 @@ struct Args {
     #[arg(short, long, default_value_t = String::from("https://testnet.ckb.dev/"))]
     rpc_url: String,
 }
-fn try_fetch_data<T: DashboardData>(client: &CkbRpcClient) -> Option<anyhow::Result<T>> {
-    if T::should_update() {
-        Some(T::fetch_data_through_client(client))
-    } else {
-        None
-    }
-}
+
 fn main() -> anyhow::Result<()> {
     cursive::logger::set_filter_levels_from_env();
     cursive::logger::init();
@@ -67,66 +61,57 @@ fn main() -> anyhow::Result<()> {
         let loading_variable = loading_variable.clone();
         let client = client.clone();
         std::thread::spawn(move || {
-            let client_cloned = client.clone();
-            cb_sink
-                .send(Box::new(move |siv| {
-                    match GeneralDashboardData::fetch_data_through_client(&client_cloned) {
-                        Ok(result) => {
-                            result.update_to_view(siv);
-                        }
-                        Err(_) => {}
-                    };
-                    match BlockchainDashboardData::fetch_data_through_client(&client_cloned) {
-                        Ok(result) => {
-                            result.update_to_view(siv);
-                        }
-                        Err(_) => {}
-                    }
-                }))
-                .unwrap();
-
+            {
+                let mut general_data = GeneralDashboardData::default();
+                let result = general_data.fetch_data_through_client(&client);
+                cb_sink
+                    .send(Box::new(move |siv| {
+                        match result {
+                            Ok(result) => {
+                                result.update_to_view(siv);
+                            }
+                            Err(_) => {}
+                        };
+                    }))
+                    .unwrap();
+            }
+            let mut data: Vec<Box<dyn DashboardData>> = vec![
+                Box::new(OverviewDashboardData::default()),
+                Box::new(BlockchainDashboardData::default()),
+                Box::new(MempoolDashboardData::default()),
+                Box::new(PeersDashboardData::default()),
+            ];
             loop {
                 match rx.recv().unwrap() {
                     SyncRequest::Stop => break,
                     SyncRequest::RequestSync { pop_layer_at_end } => {
                         loading_variable.store(true, std::sync::atomic::Ordering::SeqCst);
-                        let data_basic = try_fetch_data::<OverviewDashboardData>(&client);
-                        let data_blockchain = try_fetch_data::<BlockchainDashboardData>(&client);
-                        let data_mempool = try_fetch_data::<MempoolDashboardData>(&client);
-                        let data_peers = try_fetch_data::<PeersDashboardData>(&client);
+                        let mut result_list = anyhow::Ok(vec![]);
+                        for item in data.iter_mut() {
+                            if item.should_update() {
+                                result_list = match item.fetch_data_through_client(&client) {
+                                    Ok(s) => match result_list {
+                                        Err(e) => Err(e),
+                                        Ok(mut new_list) => {
+                                            new_list.push(s);
+                                            Ok(new_list)
+                                        }
+                                    },
+                                    Err(e) => Err(e),
+                                };
+                            }
+                        }
+
                         cb_sink
                             .send(Box::new(move |siv: &mut Cursive| {
                                 if pop_layer_at_end {
                                     siv.pop_layer();
                                 }
 
-                                let result: anyhow::Result<(
-                                    Option<OverviewDashboardData>,
-                                    Option<BlockchainDashboardData>,
-                                    Option<MempoolDashboardData>,
-                                    Option<PeersDashboardData>,
-                                )> = (move || {
-                                    Ok((
-                                        data_basic.transpose()?,
-                                        data_blockchain.transpose()?,
-                                        data_mempool.transpose()?,
-                                        data_peers.transpose()?,
-                                    ))
-                                })();
-
-                                match result {
-                                    Ok((o1, o2, o3, o4)) => {
-                                        if let Some(o) = o1 {
-                                            o.update_to_view(siv);
-                                        }
-                                        if let Some(o) = o2 {
-                                            o.update_to_view(siv);
-                                        }
-                                        if let Some(o) = o3 {
-                                            o.update_to_view(siv);
-                                        }
-                                        if let Some(o) = o4 {
-                                            o.update_to_view(siv);
+                                match result_list {
+                                    Ok(result) => {
+                                        for item in result.into_iter() {
+                                            item.update_to_view(siv);
                                         }
                                     }
                                     Err(err) => {

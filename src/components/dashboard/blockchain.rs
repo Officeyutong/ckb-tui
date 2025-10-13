@@ -141,7 +141,7 @@ impl TableViewItem<ScriptColumn> for ScriptItem {
         }
     }
 }
-
+#[derive(Clone, Default)]
 pub struct BlockchainDashboardData {
     epoch: u64,
     epoch_block: u64,
@@ -158,10 +158,10 @@ pub struct BlockchainDashboardData {
 }
 
 impl DashboardData for BlockchainDashboardData {
-    fn should_update() -> bool {
+    fn should_update(&self) -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
-    fn fetch_data_through_client(client: &ckb_sdk::CkbRpcClient) -> anyhow::Result<Self> {
+    fn fetch_data_through_client(&mut self, client: &ckb_sdk::CkbRpcClient) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
         let tip_header = client
             .get_tip_header()
             .with_context(|| anyhow!("Unable to get tip header"))?;
@@ -183,7 +183,7 @@ impl DashboardData for BlockchainDashboardData {
             }
             scripts
         };
-        Ok(Self {
+        *self = Self {
             epoch,
             epoch_block,
             epoch_block_count,
@@ -194,7 +194,8 @@ impl DashboardData for BlockchainDashboardData {
             difficulty: -1.0,
             hash_rate: -1.0,
             scripts,
-        })
+        };
+        Ok(Box::new(self.clone()))
     }
 }
 
