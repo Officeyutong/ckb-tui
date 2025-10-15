@@ -185,17 +185,17 @@ pub fn peers() -> impl IntoBoxedView + use<> {
                 .child(TextView::new("[Node Status]"))
                 .child(
                     LinearLayout::horizontal()
-                        .child(TextView::new("Publicly Reachable?").min_width(20))
+                        .child(TextView::new("• Publicly Reachable?").min_width(20))
                         .child(TextView::empty().with_name(PUBLICLY_REACHABLE)),
                 )
                 .child(
                     LinearLayout::horizontal()
-                        .child(TextView::new("Connections:").min_width(20))
+                        .child(TextView::new("• Connections:").min_width(20))
                         .child(TextView::empty().with_name(CONNECTIONS)),
                 )
                 .child(
                     LinearLayout::horizontal()
-                        .child(TextView::new("Avg. Latency::").min_width(20))
+                        .child(TextView::new("• Avg. Latency::").min_width(20))
                         .child(TextView::empty().with_name(AVG_LATENCY)),
                 ),
         ))
