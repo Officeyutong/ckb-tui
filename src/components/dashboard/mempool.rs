@@ -86,6 +86,9 @@ fn update_latest_tx(state: &MempoolDashboatdInnerState, tx: PoolTransactionEntry
             fee_rate: tx.fee.value() * 1000 / tx.size.value(),
         })
         .unwrap();
+    if guard.len() > 20 {
+        guard.dequeue();
+    }
 }
 
 fn update_rejected_tx(state: &MempoolDashboatdInnerState, rej_tx: PoolTransactionReject) {
