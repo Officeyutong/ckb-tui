@@ -99,6 +99,10 @@ fn update_rejected_tx(state: &MempoolDashboatdInnerState, rej_tx: PoolTransactio
             vacant_entry.insert(1);
         }
     };
+    state.total_rejection.store(
+        guard.iter().map(|x| *x.1).sum(),
+        std::sync::atomic::Ordering::SeqCst,
+    );
 }
 
 impl MempoolDashboardState {
