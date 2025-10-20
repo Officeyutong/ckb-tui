@@ -18,7 +18,7 @@ use crate::{
             ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK, PENDING_TX, PROPOSED_TX,
             RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
         },
-        extract_epoch,
+        extract_epoch, get_average_block_time_and_estimated_epoch_time,
     },
     declare_names, update_text,
     utils::bar_chart::SimpleBarChart,
@@ -73,13 +73,6 @@ pub struct OverviewDashboardState {
     pub total_block: u64,
     // In seconds
     pub estimated_time_left: u64,
-
-    pub epoch: u64,
-    pub epoch_block: u64,
-    pub epoch_block_count: u64,
-
-    pub estimated_epoch_time: f64,
-    pub average_block_time: f64,
 }
 
 impl OverviewDashboardState {
@@ -123,11 +116,6 @@ impl OverviewDashboardState {
             current_block: 0,
             estimated_time_left: 100,
             total_block: 1,
-            epoch: 0,
-            epoch_block: 0,
-            epoch_block_count: 1,
-            average_block_time: -1.0,
-            estimated_epoch_time: -1.0,
         }
     }
 }
@@ -178,14 +166,7 @@ impl DashboardState for OverviewDashboardState {
             self.total_block = total_block;
             self.estimated_time_left = estimated_seconds.ceil() as u64;
         }
-        {
-            let epoch_field = tip_header.inner.epoch.value();
-            let (epoch, epoch_block, epoch_block_count) = extract_epoch(epoch_field);
 
-            self.epoch = epoch;
-            self.epoch_block = epoch_block;
-            self.epoch_block_count = epoch_block_count;
-        }
         self.last_update = chrono::Local::now();
         Ok(())
     }
@@ -230,24 +211,6 @@ impl UpdateToView for OverviewDashboardState {
             names::ESTIMATED_TIME_LEFT,
             format!("{}min", self.estimated_time_left.div_ceil(60))
         );
-        update_text!(
-            siv,
-            names::EPOCH,
-            format!(
-                "{} ({}/{})",
-                self.epoch, self.epoch_block, self.epoch_block_count
-            )
-        );
-        update_text!(
-            siv,
-            names::ESTIMATED_EPOCH_TIME,
-            format!("{}min", (self.estimated_epoch_time / 60.0).ceil())
-        );
-        update_text!(
-            siv,
-            names::AVERAGE_BLOCK_TIME,
-            format!("{}s", self.average_block_time)
-        );
     }
 }
 
@@ -274,6 +237,13 @@ pub struct OverviewDashboardData {
 
     // shannons per KB
     pub average_fee_rate: f64,
+
+    pub epoch: u64,
+    pub epoch_block: u64,
+    pub epoch_block_count: u64,
+
+    pub estimated_epoch_time: f64,
+    pub average_block_time: f64,
 }
 
 impl UpdateToView for OverviewDashboardData {
@@ -333,6 +303,24 @@ impl UpdateToView for OverviewDashboardData {
             names::AVERAGE_FEE_RATE,
             format!("{} shannons/KB", self.average_fee_rate)
         );
+        update_text!(
+            siv,
+            names::EPOCH,
+            format!(
+                "{} ({}/{})",
+                self.epoch, self.epoch_block, self.epoch_block_count
+            )
+        );
+        update_text!(
+            siv,
+            names::ESTIMATED_EPOCH_TIME,
+            format!("{}min", (self.estimated_epoch_time / 60.0).ceil())
+        );
+        update_text!(
+            siv,
+            names::AVERAGE_BLOCK_TIME,
+            format!("{:.2}s", self.average_block_time)
+        );
     }
 }
 impl DashboardData for OverviewDashboardData {
@@ -362,6 +350,16 @@ impl DashboardData for OverviewDashboardData {
         let mut system = System::new_all();
         system.refresh_cpu_usage();
         system.refresh_memory();
+        let tip_header = client
+            .get_tip_header()
+            .with_context(|| anyhow!("Unable to get tip header"))?;
+
+        let epoch_field = tip_header.inner.epoch.value();
+        let (epoch, epoch_block, epoch_block_count) = extract_epoch(epoch_field);
+
+        let (average_block_time, estimated_epoch_time) =
+            get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
+
         *self = OverviewDashboardData {
             average_latency: -1,
             inbound_peers,
@@ -379,6 +377,11 @@ impl DashboardData for OverviewDashboardData {
             difficulty: -1.0,
             hash_rate: 0,
             average_fee_rate: fee_rate_statistics.unwrap().mean.value() as f64,
+            epoch,
+            epoch_block,
+            epoch_block_count,
+            average_block_time,
+            estimated_epoch_time,
         };
 
         Ok(Box::new(self.clone()))

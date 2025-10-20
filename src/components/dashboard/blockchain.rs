@@ -16,7 +16,7 @@ use crate::{
             HASH_RATE, LIVE_CELLS, LIVE_CELLS_HISTORY, OCCUPIED_CAPACITY,
             OCCUPIED_CAPACITY_HISTORY, SCRIPT_TABLE,
         },
-        extract_epoch,
+        extract_epoch, get_average_block_time_and_estimated_epoch_time,
     },
     declare_names, update_text,
     utils::bar_chart::SimpleBarChart,
@@ -161,12 +161,16 @@ impl DashboardData for BlockchainDashboardData {
     fn should_update(&self) -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
-    fn fetch_data_through_client(&mut self, client: &ckb_sdk::CkbRpcClient) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
+    fn fetch_data_through_client(
+        &mut self,
+        client: &ckb_sdk::CkbRpcClient,
+    ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
         let tip_header = client
             .get_tip_header()
             .with_context(|| anyhow!("Unable to get tip header"))?;
         let (epoch, epoch_block, epoch_block_count) = extract_epoch(tip_header.inner.epoch.value());
-
+        let (average_block_time, estimated_epoch_time) =
+            get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
         let scripts = {
             let mut scripts = vec![];
             for i in 0..20 {
@@ -187,8 +191,8 @@ impl DashboardData for BlockchainDashboardData {
             epoch,
             epoch_block,
             epoch_block_count,
-            estimated_epoch_time: -1.0,
-            average_block_time: -1.0,
+            estimated_epoch_time,
+            average_block_time,
             block_height: tip_header.inner.number.value(),
             algorithm: "Unknown".to_string(),
             difficulty: -1.0,
@@ -212,13 +216,13 @@ impl UpdateToView for BlockchainDashboardData {
         update_text!(
             siv,
             ESTIMATED_EPOCH_TIME,
-            format!("{} min", self.estimated_epoch_time / 60.0)
+            format!("{:.2} min", self.estimated_epoch_time / 60.0)
         );
         update_text!(siv, BLOCK_HEIGHT, format!("{}", self.block_height));
         update_text!(
             siv,
             AVERAGE_BLOCK_TIME,
-            format!("{} s", self.average_block_time)
+            format!("{:.2} s", self.average_block_time)
         );
         update_text!(siv, ALGORITHM, format!("{}", self.algorithm));
         update_text!(siv, DIFFICULTY, format!("{:.2} EH", self.difficulty));
