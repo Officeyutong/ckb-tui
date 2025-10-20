@@ -83,7 +83,7 @@ fn update_latest_tx(state: &MempoolDashboatdInnerState, tx: PoolTransactionEntry
                 .unwrap()
                 .into(),
             size_in_bytes: tx.size.value(),
-            fee_rate: tx.fee.value(),
+            fee_rate: tx.fee.value() * 1000 / tx.size.value(),
         })
         .unwrap();
 }
@@ -198,7 +198,8 @@ impl UpdateToView for MempoolDashboardState {
                     TOTAL_REJECTION,
                     format!(
                         "{}",
-                        state.total_rejection
+                        state
+                            .total_rejection
                             .load(std::sync::atomic::Ordering::SeqCst)
                     )
                 );
@@ -221,9 +222,13 @@ impl UpdateToView for MempoolDashboardState {
                 siv.call_on_name(
                     LATEST_INCOMING_TX_TABLE,
                     |v: &mut TableView<LatestIncomingTxItem, LatestIncomingTxColumn>| {
+                        let index = v.row();
                         v.clear();
                         for item in state.latest_incoming_txs.read().unwrap().vec().iter() {
                             v.insert_item(item.clone());
+                        }
+                        if let Some(index) = index {
+                            v.set_selected_row(index);
                         }
                     },
                 );
