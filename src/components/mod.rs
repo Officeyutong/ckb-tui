@@ -1,6 +1,7 @@
 use anyhow::Context;
 use anyhow::anyhow;
 use ckb_jsonrpc_types::HeaderView;
+use ckb_jsonrpc_types::PoolTransactionReject;
 use ckb_sdk::CkbRpcClient;
 use cursive::Cursive;
 
@@ -46,4 +47,25 @@ fn get_average_block_time_and_estimated_epoch_time(
     let average_block_time = time_diff_in_epoch as f64 / 1000.0 / epoch_block as f64;
     let estimated_epoch_time = (epoch_block_count - epoch_block) as f64 * average_block_time;
     Ok((average_block_time, estimated_epoch_time))
+}
+
+fn map_pool_transaction_to_reason(rej: &PoolTransactionReject) -> &'static str {
+    match rej {
+        PoolTransactionReject::LowFeeRate(_) => "Transaction fee lower than config",
+        PoolTransactionReject::ExceededMaximumAncestorsCount(_) => {
+            "Transaction exceeded maximum ancestors count limit"
+        }
+        PoolTransactionReject::ExceededTransactionSizeLimit(_) => {
+            "Transaction exceeded maximum size limit"
+        }
+        PoolTransactionReject::Full(_) => "Transaction are replaced because the pool is full",
+        PoolTransactionReject::Duplicated(_) => "Transaction already exists in transaction_pool",
+        PoolTransactionReject::Malformed(_) => "Malformed transaction",
+        PoolTransactionReject::DeclaredWrongCycles(_) => "Declared wrong cycles",
+        PoolTransactionReject::Resolve(_) => "Resolve failed",
+        PoolTransactionReject::Verification(_) => "Verification failed",
+        PoolTransactionReject::Expiry(_) => "Transaction expired",
+        PoolTransactionReject::RBFRejected(_) => "RBF rejected",
+        PoolTransactionReject::Invalidated(_) => "Invalidated rejected",
+    }
 }

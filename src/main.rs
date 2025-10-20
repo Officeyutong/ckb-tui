@@ -21,7 +21,7 @@ use crate::components::{
         GeneralDashboardData,
         blockchain::{BlockchainDashboardData, BlockchainDashboardState},
         dashboard,
-        mempool::MempoolDashboardData,
+        mempool::{MempoolDashboardData, MempoolDashboardState},
         overview::{OverviewDashboardData, OverviewDashboardState},
         peers::PeersDashboardData,
         set_loading,
@@ -43,6 +43,8 @@ struct Args {
     /// RPC endpoint of CKB node
     #[arg(short, long, default_value_t = String::from("https://testnet.ckb.dev/"))]
     rpc_url: String,
+    #[arg(short, long)]
+    tcp_url: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -160,6 +162,7 @@ fn main() -> anyhow::Result<()> {
         std::thread::spawn(move || {
             let mut overview_state = OverviewDashboardState::new(client.clone());
             let mut blockchain_state = BlockchainDashboardState::new(client.clone());
+            let mut mempool_state = MempoolDashboardState::new(args.tcp_url.clone());
 
             loop {
                 cb_sink
@@ -169,6 +172,7 @@ fn main() -> anyhow::Result<()> {
                     anyhow::Ok((
                         overview_state.update_state()?,
                         blockchain_state.update_state()?,
+                        mempool_state.update_state()?,
                     ))
                 })();
                 match result {
@@ -191,11 +195,12 @@ fn main() -> anyhow::Result<()> {
                 };
                 let overview_state = overview_state.clone();
                 let blockchain_state = blockchain_state.clone();
-
+                let mempool_state = mempool_state.clone();
                 cb_sink
                     .send(Box::new(move |siv| {
                         overview_state.update_to_view(siv);
                         blockchain_state.update_to_view(siv);
+                        mempool_state.update_to_view(siv);
                     }))
                     .unwrap();
 

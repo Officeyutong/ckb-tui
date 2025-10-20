@@ -1,6 +1,15 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::RwLock;
+use std::sync::atomic::AtomicUsize;
+
 use anyhow::Context;
 use anyhow::anyhow;
 use chrono::Local;
+use chrono::TimeZone;
+use chrono::Utc;
+use ckb_jsonrpc_types::PoolTransactionEntry;
+use ckb_jsonrpc_types::PoolTransactionReject;
 use ckb_sdk::CkbRpcClient;
 use cursive::view::Scrollable;
 use cursive::{
@@ -8,7 +17,12 @@ use cursive::{
     views::{LinearLayout, Panel, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
+use queue::Queue;
+use tokio::net::TcpStream;
+use tokio_stream::StreamExt;
 
+use crate::components::DashboardState;
+use crate::components::map_pool_transaction_to_reason;
 use crate::{
     CURRENT_TAB,
     components::{
@@ -37,6 +51,188 @@ declare_names!(
     REJECTION_TABLE,
     LATEST_INCOMING_TX_TABLE
 );
+
+#[derive(Clone)]
+pub struct MempoolDashboatdInnerState {
+    total_rejection: Arc<AtomicUsize>,
+    rejection_details: Arc<RwLock<HashMap<String, usize>>>,
+    latest_incoming_txs: Arc<RwLock<Queue<LatestIncomingTxItem>>>,
+    stop_tx: tokio::sync::mpsc::Sender<()>,
+}
+
+#[derive(Clone)]
+pub enum MempoolDashboardState {
+    WithTcpConn(MempoolDashboatdInnerState),
+    WithoutTcpConn,
+}
+
+async fn create_client(addr: &str) -> anyhow::Result<ckb_sdk::pubsub::Client<TcpStream>> {
+    log::debug!("Connecting TCP: {}", addr);
+    Ok(ckb_sdk::pubsub::Client::new(
+        TcpStream::connect(addr).await?,
+    ))
+}
+
+fn update_latest_tx(state: &MempoolDashboatdInnerState, tx: PoolTransactionEntry) {
+    let mut guard = state.latest_incoming_txs.write().unwrap();
+    guard
+        .queue(LatestIncomingTxItem {
+            tx_hash: tx.transaction.hash.to_string(),
+            time: Utc
+                .timestamp_millis_opt(tx.timestamp.value() as i64)
+                .unwrap()
+                .into(),
+            size_in_bytes: tx.size.value(),
+            fee_rate: tx.fee.value(),
+        })
+        .unwrap();
+}
+
+fn update_rejected_tx(state: &MempoolDashboatdInnerState, rej_tx: PoolTransactionReject) {
+    let mut guard = state.rejection_details.write().unwrap();
+    let reason = map_pool_transaction_to_reason(&rej_tx);
+    match guard.entry(reason.to_string()) {
+        std::collections::hash_map::Entry::Occupied(mut occupied_entry) => {
+            *occupied_entry.get_mut() += 1;
+        }
+        std::collections::hash_map::Entry::Vacant(vacant_entry) => {
+            vacant_entry.insert(1);
+        }
+    };
+}
+
+impl MempoolDashboardState {
+    #[allow(unused)]
+    pub fn stop(&self) {
+        match self {
+            MempoolDashboardState::WithTcpConn(mempool_dashboatd_inner_state) => {
+                mempool_dashboatd_inner_state.stop_tx.blocking_send(()).ok();
+            }
+            MempoolDashboardState::WithoutTcpConn => {}
+        };
+    }
+    pub fn new(subscribe_addr: Option<String>) -> Self {
+        if let Some(subscribe_addr) = subscribe_addr {
+            let (stop_tx, mut stop_rx) = tokio::sync::mpsc::channel(1);
+            let result = Self::WithTcpConn(MempoolDashboatdInnerState {
+                total_rejection: Arc::new(AtomicUsize::new(0)),
+                rejection_details: Arc::new(RwLock::new(HashMap::new())),
+                latest_incoming_txs: Arc::new(RwLock::new(Queue::new())),
+                stop_tx,
+            });
+            let self_cloned = result.clone();
+            let tcp_addr = subscribe_addr.to_string();
+            std::thread::spawn(move || {
+                log::info!("Subscribing thread started");
+
+                let result = match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(o) => o,
+                    Err(e) => {
+                        log::error!("{:?}", e);
+                        panic!("Unable to start tokio runtime");
+                    }
+                }
+                .block_on(async move {
+                    let mut new_tx_sub = create_client(&tcp_addr)
+                        .await
+                        .with_context(|| anyhow!("Unable to connect to: {}", tcp_addr))?
+                        .subscribe::<PoolTransactionEntry>("new_transaction")
+                        .await
+                        .with_context(|| anyhow!("Unable to subscribe new_transaction"))?;
+                    let mut new_rejection_sub = create_client(&tcp_addr)
+                        .await
+                        .with_context(|| anyhow!("Unable to connect to: {}", tcp_addr))?
+                        .subscribe::<(PoolTransactionEntry, PoolTransactionReject)>(
+                            "rejected_transaction",
+                        )
+                        .await
+                        .with_context(|| anyhow!("Unable to subscribe rejected_transaction"))?;
+                    log::info!("Before subscribe select loop");
+                    loop {
+                        tokio::select! {
+                            _ = stop_rx.recv() => {
+                                log::debug!("Exiting tx subscribing thread");
+                                break;
+                            }
+                            Some(Ok(r)) = new_tx_sub.next() => {
+                                log::debug!("Received transaction sub: {:?}", r);
+                                update_latest_tx(match self_cloned{
+                                    MempoolDashboardState::WithTcpConn(ref mempool_dashboatd_inner_state) => mempool_dashboatd_inner_state,
+                                    MempoolDashboardState::WithoutTcpConn => unreachable!(),
+                                }, r.1);
+                            }
+                            Some(Ok(r)) = new_rejection_sub.next() => {
+                                log::debug!("Received rejected tx sub: {:?}", r);
+                                update_rejected_tx(match self_cloned{
+                                    MempoolDashboardState::WithTcpConn(ref mempool_dashboatd_inner_state) => mempool_dashboatd_inner_state,
+                                    MempoolDashboardState::WithoutTcpConn => unreachable!(),
+                                }, r.1.1);
+                            }
+                        }
+                    }
+                    anyhow::Ok(())
+                });
+                log::info!("Tokio runtime exited: {:?}", result);
+            });
+            result
+        } else {
+            Self::WithoutTcpConn
+        }
+    }
+}
+
+impl DashboardState for MempoolDashboardState {
+    fn update_state(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+impl UpdateToView for MempoolDashboardState {
+    fn update_to_view(&self, siv: &mut cursive::Cursive) {
+        match self {
+            MempoolDashboardState::WithTcpConn(state) => {
+                update_text!(
+                    siv,
+                    TOTAL_REJECTION,
+                    format!(
+                        "{}",
+                        state.total_rejection
+                            .load(std::sync::atomic::Ordering::SeqCst)
+                    )
+                );
+                siv.call_on_name(
+                    REJECTION_TABLE,
+                    |v: &mut TableView<RejectionItem, RejectionColumn>| {
+                        v.clear();
+                        let guard = state.rejection_details.read().unwrap();
+
+                        let mut items = guard.iter().collect::<Vec<_>>();
+                        items.sort_by(|(_, x), (_, y)| x.cmp(y).reverse());
+                        for (reason, count) in items.into_iter() {
+                            v.insert_item(RejectionItem {
+                                reason: reason.to_string(),
+                                count: *count,
+                            });
+                        }
+                    },
+                );
+                siv.call_on_name(
+                    LATEST_INCOMING_TX_TABLE,
+                    |v: &mut TableView<LatestIncomingTxItem, LatestIncomingTxColumn>| {
+                        v.clear();
+                        for item in state.latest_incoming_txs.read().unwrap().vec().iter() {
+                            v.insert_item(item.clone());
+                        }
+                    },
+                );
+            }
+            MempoolDashboardState::WithoutTcpConn => todo!(),
+        }
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct MempoolDashboardData {
     total_pool_size_in_tx: u64,
@@ -48,10 +244,8 @@ pub struct MempoolDashboardData {
     tx_in: usize,
     tx_out: usize,
     avg_block_time: f64,
-    total_rejection: usize,
+
     rejection_rate: f64,
-    rejection_details: Vec<RejectionItem>,
-    latest_incoming_txs: Vec<LatestIncomingTxItem>,
 }
 
 impl DashboardData for MempoolDashboardData {
@@ -75,18 +269,8 @@ impl DashboardData for MempoolDashboardData {
             tx_in: 0,
             tx_out: 0,
             avg_block_time: -1.0,
-            total_rejection: 0,
+
             rejection_rate: -1.0,
-            rejection_details: vec![RejectionItem {
-                count: 1,
-                reason: format!("test"),
-            }],
-            latest_incoming_txs: vec![LatestIncomingTxItem {
-                fee_rate: 1111,
-                size_in_bytes: 2222,
-                time: chrono::Local::now(),
-                tx_hash: "111111".to_string(),
-            }],
         };
         Ok(Box::new(self.clone()))
     }
@@ -117,29 +301,11 @@ impl UpdateToView for MempoolDashboardData {
         update_text!(siv, TX_IN, format!("{} tx/s", self.tx_in));
         update_text!(siv, TX_OUT, format!("{} tx/s", self.tx_out));
         update_text!(siv, AVG_BLOCK_TIME, format!("{:.1}s", self.avg_block_time));
-        update_text!(siv, TOTAL_REJECTION, format!("{}", self.total_rejection));
+
         update_text!(
             siv,
             REJECTION_RATE,
             format!("{:.1}%", self.rejection_rate * 100.0)
-        );
-        siv.call_on_name(
-            REJECTION_TABLE,
-            |v: &mut TableView<RejectionItem, RejectionColumn>| {
-                v.clear();
-                for item in self.rejection_details.iter() {
-                    v.insert_item(item.clone());
-                }
-            },
-        );
-        siv.call_on_name(
-            LATEST_INCOMING_TX_TABLE,
-            |v: &mut TableView<LatestIncomingTxItem, LatestIncomingTxColumn>| {
-                v.clear();
-                for item in self.latest_incoming_txs.iter() {
-                    v.insert_item(item.clone());
-                }
-            },
         );
     }
 }
@@ -176,8 +342,8 @@ impl TableViewItem<RejectionColumn> for RejectionItem {
 struct LatestIncomingTxItem {
     tx_hash: String,
     time: chrono::DateTime<Local>,
-    size_in_bytes: usize,
-    fee_rate: usize,
+    size_in_bytes: u64,
+    fee_rate: u64,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
