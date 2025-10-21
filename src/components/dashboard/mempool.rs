@@ -22,6 +22,7 @@ use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 
 use crate::components::DashboardState;
+use crate::components::dashboard::mempool::names::SUBSCRIBE_WARNING;
 use crate::components::map_pool_transaction_to_reason;
 use crate::{
     CURRENT_TAB,
@@ -49,7 +50,8 @@ declare_names!(
     TOTAL_REJECTION,
     REJECTION_RATE,
     REJECTION_TABLE,
-    LATEST_INCOMING_TX_TABLE
+    LATEST_INCOMING_TX_TABLE,
+    SUBSCRIBE_WARNING
 );
 
 #[derive(Clone)]
@@ -239,8 +241,15 @@ impl UpdateToView for MempoolDashboardState {
                         }
                     },
                 );
+                update_text!(siv, SUBSCRIBE_WARNING, " ");
             }
-            MempoolDashboardState::WithoutTcpConn => todo!(),
+            MempoolDashboardState::WithoutTcpConn => {
+                update_text!(
+                    siv,
+                    SUBSCRIBE_WARNING,
+                    "Subscribe TCP address is not set, latest transactions and rejected transactions won't be updated"
+                );
+            }
         }
     }
 }
@@ -465,7 +474,7 @@ pub fn mempool_dashboard() -> impl IntoBoxedView + use<> {
                             .child(TextView::new("• Rejection Rate:").min_width(20))
                             .child(TextView::empty().with_name(REJECTION_RATE)),
                     )
-                    .child(TextView::new(" "))
+                    .child(TextView::new(" ").with_name(SUBSCRIBE_WARNING))
                     .child(
                         TableView::<RejectionItem, RejectionColumn>::new()
                             .column(RejectionColumn::Reason, "Rejection Reason", |c| c)
