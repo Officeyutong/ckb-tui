@@ -23,6 +23,7 @@ use tokio_stream::StreamExt;
 
 use crate::components::DashboardState;
 use crate::components::dashboard::mempool::names::SUBSCRIBE_WARNING;
+use crate::components::get_average_block_time_and_estimated_epoch_time;
 use crate::components::map_pool_transaction_to_reason;
 use crate::{
     CURRENT_TAB,
@@ -57,6 +58,7 @@ declare_names!(
 #[derive(Clone)]
 pub struct MempoolDashboatdInnerState {
     total_rejection: Arc<AtomicUsize>,
+    total_transaction: Arc<AtomicUsize>,
     rejection_details: Arc<RwLock<HashMap<String, usize>>>,
     latest_incoming_txs: Arc<RwLock<Queue<LatestIncomingTxItem>>>,
     stop_tx: tokio::sync::mpsc::Sender<()>,
@@ -91,6 +93,9 @@ fn update_latest_tx(state: &MempoolDashboatdInnerState, tx: PoolTransactionEntry
     if guard.len() > 20 {
         guard.dequeue();
     }
+    state
+        .total_transaction
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 }
 
 fn update_rejected_tx(state: &MempoolDashboatdInnerState, rej_tx: PoolTransactionReject) {
@@ -125,6 +130,7 @@ impl MempoolDashboardState {
             let (stop_tx, mut stop_rx) = tokio::sync::mpsc::channel(1);
             let result = Self::WithTcpConn(MempoolDashboatdInnerState {
                 total_rejection: Arc::new(AtomicUsize::new(0)),
+                total_transaction: Arc::new(AtomicUsize::new(0)),
                 rejection_details: Arc::new(RwLock::new(HashMap::new())),
                 latest_incoming_txs: Arc::new(RwLock::new(Queue::new())),
                 stop_tx,
@@ -242,6 +248,18 @@ impl UpdateToView for MempoolDashboardState {
                     },
                 );
                 update_text!(siv, SUBSCRIBE_WARNING, " ");
+                let rejection_rate = state
+                    .total_rejection
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                    as f64
+                    / state
+                        .total_transaction
+                        .load(std::sync::atomic::Ordering::SeqCst) as f64;
+                update_text!(
+                    siv,
+                    REJECTION_RATE,
+                    format!("{:.2} %", rejection_rate * 100.0)
+                );
             }
             MempoolDashboardState::WithoutTcpConn => {
                 update_text!(
@@ -264,9 +282,7 @@ pub struct MempoolDashboardData {
     avg_fee_rate: u64,
     tx_in: usize,
     tx_out: usize,
-    avg_block_time: f64,
-
-    rejection_rate: f64,
+    average_block_time: f64,
 }
 
 impl DashboardData for MempoolDashboardData {
@@ -280,6 +296,11 @@ impl DashboardData for MempoolDashboardData {
         let fee_rate_statistics = client
             .get_fee_rate_statistics(None)
             .with_context(|| anyhow!("Unable to get fee rate statistics"))?;
+        let tip_header = client
+            .get_tip_header()
+            .with_context(|| anyhow!("Unable to get tip header"))?;
+        let (average_block_time, _) =
+            get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
         *self = Self {
             total_pool_size_in_tx: tx_pool_info.total_tx_size.value(),
             total_pool_size_in_bytes: 0,
@@ -289,9 +310,7 @@ impl DashboardData for MempoolDashboardData {
             avg_fee_rate: fee_rate_statistics.unwrap().mean.value(),
             tx_in: 0,
             tx_out: 0,
-            avg_block_time: -1.0,
-
-            rejection_rate: -1.0,
+            average_block_time,
         };
         Ok(Box::new(self.clone()))
     }
@@ -321,13 +340,7 @@ impl UpdateToView for MempoolDashboardData {
         );
         update_text!(siv, TX_IN, format!("{} tx/s", self.tx_in));
         update_text!(siv, TX_OUT, format!("{} tx/s", self.tx_out));
-        update_text!(siv, AVG_BLOCK_TIME, format!("{:.1}s", self.avg_block_time));
-
-        update_text!(
-            siv,
-            REJECTION_RATE,
-            format!("{:.1}%", self.rejection_rate * 100.0)
-        );
+        update_text!(siv, AVG_BLOCK_TIME, format!("{:.1}s", self.average_block_time));
     }
 }
 #[derive(Clone, Default)]
