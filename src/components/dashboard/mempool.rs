@@ -254,7 +254,7 @@ impl UpdateToView for MempoolDashboardState {
                     as f64
                     / state
                         .total_transaction
-                        .load(std::sync::atomic::Ordering::SeqCst) as f64;
+                        .load(std::sync::atomic::Ordering::SeqCst).max(1) /*Avoid NaN*/ as f64;
                 update_text!(
                     siv,
                     REJECTION_RATE,
@@ -340,7 +340,11 @@ impl UpdateToView for MempoolDashboardData {
         );
         update_text!(siv, TX_IN, format!("{} tx/s", self.tx_in));
         update_text!(siv, TX_OUT, format!("{} tx/s", self.tx_out));
-        update_text!(siv, AVG_BLOCK_TIME, format!("{:.1}s", self.average_block_time));
+        update_text!(
+            siv,
+            AVG_BLOCK_TIME,
+            format!("{:.1}s", self.average_block_time)
+        );
     }
 }
 #[derive(Clone, Default)]
@@ -407,7 +411,7 @@ impl TableViewItem<LatestIncomingTxColumn> for LatestIncomingTxItem {
     {
         match column {
             LatestIncomingTxColumn::TxHash => self.tx_hash.cmp(&other.tx_hash),
-            LatestIncomingTxColumn::Time => self.time.cmp(&other.time),
+            LatestIncomingTxColumn::Time => self.time.cmp(&other.time).reverse(),
             LatestIncomingTxColumn::SizeInBytes => self.size_in_bytes.cmp(&other.size_in_bytes),
             LatestIncomingTxColumn::FeeRate => self.fee_rate.cmp(&other.fee_rate),
         }
@@ -492,6 +496,7 @@ pub fn mempool_dashboard() -> impl IntoBoxedView + use<> {
                         TableView::<RejectionItem, RejectionColumn>::new()
                             .column(RejectionColumn::Reason, "Rejection Reason", |c| c)
                             .column(RejectionColumn::Count, "Count", |c| c)
+                            .default_column(RejectionColumn::Count)
                             .with_name(REJECTION_TABLE)
                             .min_size((50, 5)),
                     ),
@@ -513,6 +518,7 @@ pub fn mempool_dashboard() -> impl IntoBoxedView + use<> {
                                 "Fee Rate (shannons/kB)",
                                 |c| c,
                             )
+                            .default_column(LatestIncomingTxColumn::Time)
                             .with_name(LATEST_INCOMING_TX_TABLE)
                             .min_size((50, 5)),
                     ),
