@@ -43,6 +43,8 @@ struct Args {
     /// RPC endpoint of CKB node
     #[arg(short, long, default_value_t = String::from("https://testnet.ckb.dev/"))]
     rpc_url: String,
+    /// TCP endpoint of CKB node, used for receiving pushed transactions data
+    /// If not provided, latest transactions and rejected transactions won't be displayed
     #[arg(short, long)]
     tcp_url: Option<String>,
 }
