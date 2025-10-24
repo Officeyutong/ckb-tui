@@ -11,21 +11,24 @@ use ckb_sdk::CkbRpcClient;
 use cursive::{
     Cursive,
     view::{IntoBoxedView, Nameable, Resizable},
-    views::{Button, LinearLayout, Panel, TextView},
+    views::{LinearLayout, Panel, RadioGroup, TextView},
 };
 use cursive_aligned_view::Alignable;
 
 use crate::{
+    CURRENT_TAB,
     components::{
+        DashboardData, UpdateToView,
         dashboard::{
             blockchain::blockchain_dashboard,
-            logs::{logs_dashboard, FilterLogOption},
+            logs::{FilterLogOption, logs_dashboard},
             mempool::mempool_dashboard,
             names::{MAIN_LAYOUT, REFRESHING_LABEL, TITLE},
             overview::basic_info_dashboard,
-            peers::peers,
-        }, DashboardData, UpdateToView
-    }, declare_names, CURRENT_TAB
+            peers::peers_dashboard,
+        },
+    },
+    declare_names,
 };
 
 declare_names!(names, "dashboard_", TITLE, REFRESHING_LABEL, MAIN_LAYOUT);
@@ -68,11 +71,21 @@ impl DashboardData for GeneralDashboardData {
 }
 
 pub fn dashboard(event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
+    let event_sender_0 = event_sender.clone();
     let event_sender_1 = event_sender.clone();
     let event_sender_2 = event_sender.clone();
     let event_sender_3 = event_sender.clone();
     let event_sender_4 = event_sender.clone();
-    let event_sender_5 = event_sender.clone();
+    let mut tab_selector = RadioGroup::<usize>::new().on_change(move |siv, value: &usize| {
+        match value {
+            idx @ 0 => switch_panel(siv, basic_info_dashboard(event_sender_0.clone()), *idx),
+            idx @ 1 => switch_panel(siv, blockchain_dashboard(event_sender_1.clone()), *idx),
+            idx @ 2 => switch_panel(siv, mempool_dashboard(event_sender_2.clone()), *idx),
+            idx @ 3 => switch_panel(siv, peers_dashboard(event_sender_3.clone()), *idx),
+            idx @ 4 => switch_panel(siv, logs_dashboard(event_sender_4.clone()), *idx),
+            _ => unreachable!(),
+        };
+    });
 
     Panel::new(
         LinearLayout::vertical()
@@ -81,34 +94,29 @@ pub fn dashboard(event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + u
             .child(
                 LinearLayout::horizontal()
                     .child(
-                        Button::new("Overview", move |s| {
-                            switch_panel(s, basic_info_dashboard(event_sender_1.clone()), 0)
-                        })
-                        .fixed_width(15),
+                        tab_selector
+                            .button(0, "Overview")
+                            .fixed_width(15)
                     )
                     .child(
-                        Button::new("Blockchain", move |s| {
-                            switch_panel(s, blockchain_dashboard(event_sender_2.clone()), 1)
-                        })
-                        .fixed_width(15),
+                        tab_selector
+                            .button(1, "Blockchain")
+                            .fixed_width(17)
                     )
                     .child(
-                        Button::new("Mempool", move |s| {
-                            switch_panel(s, mempool_dashboard(event_sender_3.clone()), 2)
-                        })
-                        .fixed_width(15),
+                        tab_selector
+                            .button(2, "Mempool")
+                            .fixed_width(15)
                     )
                     .child(
-                        Button::new("Peers", move |s| {
-                            switch_panel(s, peers(event_sender_4.clone()), 3)
-                        })
-                        .fixed_width(15),
+                        tab_selector
+                            .button(3, "Peers")
+                            .fixed_width(15)
                     )
                     .child(
-                        Button::new("Logs", move |s| {
-                            switch_panel(s, logs_dashboard(event_sender_5.clone()), 4)
-                        })
-                        .fixed_width(15),
+                        tab_selector
+                            .button(4, "Logs")
+                            .fixed_width(15)
                     )
                     .align_center(),
             )

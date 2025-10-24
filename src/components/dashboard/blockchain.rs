@@ -43,11 +43,9 @@ pub struct BlockchainDashboardState {
     live_cells_history: Queue<f64>,
     max_live_cells: u64,
     live_cells: u64,
-
     occupied_capacity_history: Queue<f64>,
     max_occupied_capacity: u64,
     occupied_capacity: u64,
-    // client: CkbRpcClient,
 }
 
 impl UpdateToView for BlockchainDashboardState {
@@ -227,9 +225,13 @@ impl UpdateToView for BlockchainDashboardData {
         siv.call_on_name(
             SCRIPT_TABLE,
             |view: &mut TableView<ScriptItem, ScriptColumn>| {
+                let index = view.row();
                 view.clear();
                 for i in 0..self.scripts.len() {
                     view.insert_item(self.scripts[i].clone());
+                }
+                if let Some(index) = index {
+                    view.set_selected_row(index);
                 }
             },
         );

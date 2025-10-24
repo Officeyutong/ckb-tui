@@ -183,7 +183,7 @@ impl DashboardData for PeersDashboardData {
     }
 }
 
-pub fn peers(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
+pub fn peers_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
     LinearLayout::vertical()
         .child(Panel::new(
             LinearLayout::vertical()
