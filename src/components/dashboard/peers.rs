@@ -1,3 +1,5 @@
+use std::sync::mpsc;
+
 use anyhow::{Context, anyhow};
 use ckb_sdk::CkbRpcClient;
 use cursive::{
@@ -12,7 +14,10 @@ use crate::{
     CURRENT_TAB,
     components::{
         DashboardData, UpdateToView,
-        dashboard::peers::names::{AVG_LATENCY, CONNECTIONS, PEERS_TABLE, PUBLICLY_REACHABLE},
+        dashboard::{
+            TUIEvent,
+            peers::names::{AVG_LATENCY, CONNECTIONS, PEERS_TABLE, PUBLICLY_REACHABLE},
+        },
     },
     declare_names, update_text,
 };
@@ -178,7 +183,7 @@ impl DashboardData for PeersDashboardData {
     }
 }
 
-pub fn peers() -> impl IntoBoxedView + use<> {
+pub fn peers(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
     LinearLayout::vertical()
         .child(Panel::new(
             LinearLayout::vertical()

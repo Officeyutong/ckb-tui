@@ -1,3 +1,5 @@
+use std::sync::mpsc;
+
 use anyhow::{Context, anyhow};
 use ckb_sdk::CkbRpcClient;
 use cursive::{
@@ -8,18 +10,13 @@ use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
 
 use crate::{
-    CURRENT_TAB,
     components::{
-        DashboardData, DashboardState, UpdateToView,
-        dashboard::blockchain::names::{
+        dashboard::{blockchain::names::{
             ALGORITHM, AVERAGE_BLOCK_TIME, BLOCK_HEIGHT, DIFFICULTY, EPOCH, ESTIMATED_EPOCH_TIME,
             HASH_RATE, LIVE_CELLS, LIVE_CELLS_HISTORY, OCCUPIED_CAPACITY,
             OCCUPIED_CAPACITY_HISTORY, SCRIPT_TABLE,
-        },
-        extract_epoch, get_average_block_time_and_estimated_epoch_time,
-    },
-    declare_names, update_text,
-    utils::bar_chart::SimpleBarChart,
+        }, TUIEvent}, extract_epoch, get_average_block_time_and_estimated_epoch_time, DashboardData, DashboardState, UpdateToView
+    }, declare_names, update_text, utils::bar_chart::SimpleBarChart, CURRENT_TAB
 };
 
 const TEST_DATA: [f64; 10] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
@@ -239,7 +236,7 @@ impl UpdateToView for BlockchainDashboardData {
     }
 }
 
-pub fn blockchain_dashboard() -> impl IntoBoxedView + use<> {
+pub fn blockchain_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
     LinearLayout::vertical()
         .child(
             LinearLayout::horizontal()

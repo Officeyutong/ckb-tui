@@ -19,9 +19,11 @@ use cursive::{
 use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
 use tokio::net::TcpStream;
+use std::sync::mpsc;
 use tokio_stream::StreamExt;
 
 use crate::components::DashboardState;
+use crate::components::dashboard::TUIEvent;
 use crate::components::dashboard::mempool::names::SUBSCRIBE_WARNING;
 use crate::components::get_average_block_time_and_estimated_epoch_time;
 use crate::components::map_pool_transaction_to_reason;
@@ -418,7 +420,7 @@ impl TableViewItem<LatestIncomingTxColumn> for LatestIncomingTxItem {
     }
 }
 
-pub fn mempool_dashboard() -> impl IntoBoxedView + use<> {
+pub fn mempool_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
     LinearLayout::vertical()
         .child(
             LinearLayout::horizontal()

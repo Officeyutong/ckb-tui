@@ -1,7 +1,10 @@
 pub mod blockchain;
+pub mod logs;
 pub mod mempool;
 pub mod overview;
 pub mod peers;
+
+use std::sync::mpsc;
 
 use anyhow::{Context, anyhow};
 use ckb_sdk::CkbRpcClient;
@@ -13,18 +16,16 @@ use cursive::{
 use cursive_aligned_view::Alignable;
 
 use crate::{
-    CURRENT_TAB,
     components::{
-        DashboardData, UpdateToView,
         dashboard::{
             blockchain::blockchain_dashboard,
+            logs::{logs_dashboard, FilterLogOption},
             mempool::mempool_dashboard,
             names::{MAIN_LAYOUT, REFRESHING_LABEL, TITLE},
             overview::basic_info_dashboard,
             peers::peers,
-        },
-    },
-    declare_names,
+        }, DashboardData, UpdateToView
+    }, declare_names, CURRENT_TAB
 };
 
 declare_names!(names, "dashboard_", TITLE, REFRESHING_LABEL, MAIN_LAYOUT);
@@ -66,7 +67,13 @@ impl DashboardData for GeneralDashboardData {
     }
 }
 
-pub fn dashboard() -> impl IntoBoxedView + use<> {
+pub fn dashboard(event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
+    let event_sender_1 = event_sender.clone();
+    let event_sender_2 = event_sender.clone();
+    let event_sender_3 = event_sender.clone();
+    let event_sender_4 = event_sender.clone();
+    let event_sender_5 = event_sender.clone();
+
     Panel::new(
         LinearLayout::vertical()
             .child(TextView::new("CKB Node Monitor").center().with_name(TITLE))
@@ -74,22 +81,38 @@ pub fn dashboard() -> impl IntoBoxedView + use<> {
             .child(
                 LinearLayout::horizontal()
                     .child(
-                        Button::new("Overview", |s| switch_panel(s, basic_info_dashboard(), 0))
-                            .fixed_width(15),
+                        Button::new("Overview", move |s| {
+                            switch_panel(s, basic_info_dashboard(event_sender_1.clone()), 0)
+                        })
+                        .fixed_width(15),
                     )
                     .child(
-                        Button::new("Blockchain", |s| switch_panel(s, blockchain_dashboard(), 1))
-                            .fixed_width(15),
+                        Button::new("Blockchain", move |s| {
+                            switch_panel(s, blockchain_dashboard(event_sender_2.clone()), 1)
+                        })
+                        .fixed_width(15),
                     )
                     .child(
-                        Button::new("Mempool", |s| switch_panel(s, mempool_dashboard(), 2))
-                            .fixed_width(15),
+                        Button::new("Mempool", move |s| {
+                            switch_panel(s, mempool_dashboard(event_sender_3.clone()), 2)
+                        })
+                        .fixed_width(15),
                     )
-                    .child(Button::new("Peers", |s| switch_panel(s, peers(), 3)).fixed_width(15))
-                    .child(Button::new("Logs", |_| ()).fixed_width(15))
+                    .child(
+                        Button::new("Peers", move |s| {
+                            switch_panel(s, peers(event_sender_4.clone()), 3)
+                        })
+                        .fixed_width(15),
+                    )
+                    .child(
+                        Button::new("Logs", move |s| {
+                            switch_panel(s, logs_dashboard(event_sender_5.clone()), 4)
+                        })
+                        .fixed_width(15),
+                    )
                     .align_center(),
             )
-            .child(basic_info_dashboard())
+            .child(basic_info_dashboard(event_sender.clone()))
             .child(Panel::new(TextView::new(
                 "Press [Q] to quit, [Tab] to switch panels, [R] to refresh",
             )))
@@ -113,4 +136,7 @@ pub fn set_loading(siv: &mut Cursive, loading: bool) {
             view.set_content(" ");
         }
     });
+}
+pub enum TUIEvent {
+    FilterLogEvent(FilterLogOption),
 }

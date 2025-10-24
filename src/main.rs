@@ -2,6 +2,7 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize},
+        mpsc,
     },
     time::Duration,
 };
@@ -18,9 +19,10 @@ use cursive_async_view::AsyncView;
 use crate::components::{
     DashboardData, DashboardState, UpdateToView,
     dashboard::{
-        GeneralDashboardData,
+        GeneralDashboardData, TUIEvent,
         blockchain::{BlockchainDashboardData, BlockchainDashboardState},
         dashboard,
+        logs::LogsDashboardState,
         mempool::{MempoolDashboardData, MempoolDashboardState},
         overview::{OverviewDashboardData, OverviewDashboardState},
         peers::PeersDashboardData,
@@ -158,23 +160,32 @@ fn main() -> anyhow::Result<()> {
             .unwrap();
         });
     }
-    {
+    let event_sender = {
+        let (event_tx, event_rx) = mpsc::channel::<TUIEvent>();
         let tx = tx.clone();
         let cb_sink = siv.cb_sink().clone();
         std::thread::spawn(move || {
             let mut overview_state = OverviewDashboardState::new(client.clone());
             let mut blockchain_state = BlockchainDashboardState::new(client.clone());
             let mut mempool_state = MempoolDashboardState::new(args.tcp_url.clone());
-
+            let mut logs_state = LogsDashboardState::new();
+            
             loop {
                 cb_sink
                     .send(Box::new(|siv| set_loading(siv, true)))
                     .unwrap();
+                if let Ok(e) = event_rx.try_recv() {
+                    overview_state.accept_event(&e);
+                    blockchain_state.accept_event(&e);
+                    mempool_state.accept_event(&e);
+                    logs_state.accept_event(&e);
+                }
                 let result = (|| {
                     anyhow::Ok((
                         overview_state.update_state()?,
                         blockchain_state.update_state()?,
                         mempool_state.update_state()?,
+                        logs_state.update_state()?,
                     ))
                 })();
                 match result {
@@ -198,11 +209,13 @@ fn main() -> anyhow::Result<()> {
                 let overview_state = overview_state.clone();
                 let blockchain_state = blockchain_state.clone();
                 let mempool_state = mempool_state.clone();
+                let logs_state = logs_state.clone();
                 cb_sink
                     .send(Box::new(move |siv| {
                         overview_state.update_to_view(siv);
                         blockchain_state.update_to_view(siv);
                         mempool_state.update_to_view(siv);
+                        logs_state.update_to_view(siv);
                     }))
                     .unwrap();
 
@@ -210,16 +223,17 @@ fn main() -> anyhow::Result<()> {
                     pop_layer_at_end: false,
                 })
                 .unwrap();
-                std::thread::sleep(Duration::from_secs(1));
+                std::thread::sleep(Duration::from_millis(300));
             }
         });
-    }
+        event_tx
+    };
     tx.send(SyncRequest::RequestSync {
         pop_layer_at_end: false,
     })
     .unwrap();
     siv.set_autorefresh(true);
-    siv.add_layer(dashboard());
+    siv.add_layer(dashboard(event_sender));
     siv.run();
     tx.send(SyncRequest::Stop).unwrap();
     Ok(())

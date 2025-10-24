@@ -1,3 +1,5 @@
+use std::sync::mpsc;
+
 use anyhow::{Context, anyhow};
 use chrono::Local;
 use ckb_sdk::CkbRpcClient;
@@ -9,19 +11,14 @@ use cursive::{
 use sysinfo::{Disks, Networks, System};
 
 use crate::{
-    CURRENT_TAB,
     components::{
-        DashboardData, DashboardState, UpdateToView,
-        dashboard::overview::names::{
+        dashboard::{overview::names::{
             AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITING_TX, CONNECTED_PEERS,
             CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED, DISK_USAGE, EPOCH,
             ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK, PENDING_TX, PROPOSED_TX,
             RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
-        },
-        extract_epoch, get_average_block_time_and_estimated_epoch_time,
-    },
-    declare_names, update_text,
-    utils::bar_chart::SimpleBarChart,
+        }, TUIEvent}, extract_epoch, get_average_block_time_and_estimated_epoch_time, DashboardData, DashboardState, UpdateToView
+    }, declare_names, update_text, utils::bar_chart::SimpleBarChart, CURRENT_TAB
 };
 
 declare_names!(
@@ -388,7 +385,7 @@ impl DashboardData for OverviewDashboardData {
     }
 }
 
-pub fn basic_info_dashboard() -> impl IntoBoxedView + use<> {
+pub fn basic_info_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
     LinearLayout::vertical()
         .child(
             LinearLayout::horizontal()
