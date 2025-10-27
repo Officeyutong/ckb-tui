@@ -200,7 +200,7 @@ pub fn peers_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedV
                 )
                 .child(
                     LinearLayout::horizontal()
-                        .child(TextView::new("• Avg. Latency::").min_width(25))
+                        .child(TextView::new("• Avg. Latency:").min_width(25))
                         .child(TextView::empty().with_name(AVG_LATENCY)),
                 ),
         ))
