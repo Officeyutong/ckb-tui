@@ -165,7 +165,7 @@ fn main() -> anyhow::Result<()> {
         let tx = tx.clone();
         let cb_sink = siv.cb_sink().clone();
         std::thread::spawn(move || {
-            let mut overview_state = OverviewDashboardState::new(client.clone());
+            let mut overview_state = OverviewDashboardState::new(client.clone()).unwrap();
             let mut blockchain_state = BlockchainDashboardState::new(client.clone());
             let mut mempool_state = MempoolDashboardState::new(args.tcp_url.clone());
             let mut logs_state = LogsDashboardState::new();

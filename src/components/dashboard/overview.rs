@@ -2,23 +2,31 @@ use std::sync::mpsc;
 
 use anyhow::{Context, anyhow};
 use chrono::Local;
+use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     Cursive,
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
     views::{LinearLayout, NamedView, Panel, ProgressBar, TextView},
 };
-use sysinfo::{Disks, Networks, System};
 
 use crate::{
+    CURRENT_TAB,
     components::{
-        dashboard::{overview::names::{
-            AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITING_TX, CONNECTED_PEERS,
-            CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED, DISK_USAGE, EPOCH,
-            ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK, PENDING_TX, PROPOSED_TX,
-            RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
-        }, TUIEvent}, extract_epoch, get_average_block_time_and_estimated_epoch_time, DashboardData, DashboardState, UpdateToView
-    }, declare_names, update_text, utils::bar_chart::SimpleBarChart, CURRENT_TAB
+        DashboardData, DashboardState, UpdateToView,
+        dashboard::{
+            TUIEvent,
+            overview::names::{
+                AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITING_TX,
+                CONNECTED_PEERS, CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED,
+                DISK_USAGE, EPOCH, ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK,
+                PENDING_TX, PROPOSED_TX, RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
+            },
+        },
+        extract_epoch, get_average_block_time_and_estimated_epoch_time,
+    },
+    declare_names, update_text,
+    utils::bar_chart::SimpleBarChart,
 };
 
 declare_names!(
@@ -70,35 +78,57 @@ pub struct OverviewDashboardState {
     pub total_block: u64,
     // In seconds
     pub estimated_time_left: u64,
+
+    pub cpu_percent: f64,
+    pub ram_total: u64,
+    pub ram_used: u64,
+    pub disk_used: u64,
+    pub disk_total: u64,
 }
 
 impl OverviewDashboardState {
-    fn get_total_read_and_total_write_bytes_for_disk() -> (u64, u64) {
-        let disks = Disks::new_with_refreshed_list();
-        let (read, write) = disks
-            .into_iter()
-            .map(|x| x.usage())
-            .map(|x| (x.total_read_bytes, x.total_written_bytes))
-            .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+    fn get_total_read_and_total_write_bytes_for_disk(overview: &Overview) -> (u64, u64) {
+        let disks = &overview.sys.disk_usage;
 
-        (read, write)
+        (disks.total_read_bytes, disks.total_written_bytes)
     }
 
-    fn get_total_send_and_receive_bytes_for_network_devices() -> (u64, u64) {
-        let networks = Networks::new_with_refreshed_list();
+    fn get_total_send_and_receive_bytes_for_network_devices(overview: &Overview) -> (u64, u64) {
+        let networks = &overview.sys.global.networks;
         let (send, received) = networks
             .into_iter()
-            .map(|x| x.1)
-            .map(|x| (x.total_transmitted(), x.total_received()))
+            .map(|x| (x.total_transmitted, x.total_received))
             .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
 
         (send, received)
     }
-    pub fn new(client: CkbRpcClient) -> Self {
-        let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk();
-        let (send, receive) = Self::get_total_send_and_receive_bytes_for_network_devices();
 
-        Self {
+    fn extract_cpu_percent_and_disk_total_and_disk_used_and_ram_total_and_ram_used_from_overview(
+        overview_data: &Overview,
+    ) -> (f64, u64, u64, u64, u64) {
+        let cpu_percent = overview_data.sys.global.global_cpu_usage as f64;
+        let (disk_total, disk_used) = overview_data
+            .sys
+            .global
+            .disks
+            .iter()
+            .map(|x| (x.total_space, x.total_space - x.available_space))
+            .fold((0, 0), |v1, v2| (v1.0 + v2.0, v1.1 + v2.1));
+
+        let ram_total = overview_data.sys.global.total_memory;
+        let ram_used = overview_data.sys.global.used_memory;
+
+        (cpu_percent, disk_total, disk_used, ram_total, ram_used)
+    }
+
+    pub fn new(client: CkbRpcClient) -> anyhow::Result<Self> {
+        let overview = client.post::<(), Overview>("get_overview", ())?;
+
+        let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk(&overview);
+        let (send, receive) = Self::get_total_send_and_receive_bytes_for_network_devices(&overview);
+
+        let  (cpu_percent, disk_total, disk_used, ram_total, ram_used) = Self::extract_cpu_percent_and_disk_total_and_disk_used_and_ram_total_and_ram_used_from_overview(&overview);
+        Ok(Self {
             cpu_history: Default::default(),
             last_update: chrono::Local::now(),
             disk_read_speed: 1.0,
@@ -113,32 +143,40 @@ impl OverviewDashboardState {
             current_block: 0,
             estimated_time_left: 100,
             total_block: 1,
-        }
+            cpu_percent,
+            disk_total,
+            disk_used,
+            ram_total,
+            ram_used
+        })
+    }
+    fn get_overview_data(&self) -> anyhow::Result<Overview> {
+        Ok(self.client.post::<(), Overview>("get_overview", ())?)
     }
 }
 
 impl DashboardState for OverviewDashboardState {
     fn update_state(&mut self) -> anyhow::Result<()> {
-        let mut system = System::new_all();
-        system.refresh_cpu_usage();
+        let overview_data = self.get_overview_data()?;
+
         self.cpu_history
-            .queue(system.global_cpu_usage() as f64 / 100.0)
+            .queue(overview_data.sys.global.global_cpu_usage as f64 / 100.0)
             .unwrap();
         if self.cpu_history.len() > 20 {
             self.cpu_history.dequeue();
         }
         let now = chrono::Local::now();
         let diff_secs = ((now - self.last_update).num_milliseconds() as f64) / 1e3;
-
         {
-            let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk();
+            let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk(&overview_data);
             self.disk_read_speed = (read - self.total_disk_read_bytes) as f64 / diff_secs;
             self.disk_write_speed = (write - self.total_disk_write_bytes) as f64 / diff_secs;
             self.total_disk_read_bytes = read;
             self.total_disk_write_bytes = write;
         }
         {
-            let (send, receive) = Self::get_total_send_and_receive_bytes_for_network_devices();
+            let (send, receive) =
+                Self::get_total_send_and_receive_bytes_for_network_devices(&overview_data);
             self.network_receive_speed =
                 (receive - self.total_network_receive_bytes) as f64 / diff_secs;
             self.network_send_speed = (send - self.total_network_send_bytes) as f64 / diff_secs;
@@ -208,6 +246,26 @@ impl UpdateToView for OverviewDashboardState {
             names::ESTIMATED_TIME_LEFT,
             format!("{}min", self.estimated_time_left.div_ceil(60))
         );
+        update_text!(siv, names::CPU, format!("{:.1}%", self.cpu_percent));
+        update_text!(
+            siv,
+            names::RAM,
+            format!(
+                "{:.1}GB / {:.1}GB",
+                self.ram_used as f64 / 1024.0 / 1024.0 / 1024.0,
+                self.ram_total as f64 / 1024.0 / 1024.0 / 1024.0
+            )
+        );
+        update_text!(
+            siv,
+            names::DISK_USAGE,
+            format!(
+                "{:.0}GB / {:.0}GB ({:.2}%)",
+                self.disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
+                self.disk_total as f64 / 1024.0 / 1024.0 / 1024.0,
+                (self.disk_used as f64 / self.disk_total as f64 * 100.0)
+            )
+        );
     }
 }
 
@@ -216,12 +274,6 @@ pub struct OverviewDashboardData {
     pub inbound_peers: usize,
     pub outbound_peers: usize,
     pub average_latency: isize,
-
-    pub cpu_percent: f64,
-    pub ram_total: u64,
-    pub ram_used: u64,
-    pub disk_used: u64,
-    pub disk_total: u64,
 
     pub tx_pending: u64,
     pub tx_proposed: u64,
@@ -275,26 +327,7 @@ impl UpdateToView for OverviewDashboardData {
         update_text!(siv, names::PROPOSED_TX, format!("{}", self.tx_proposed));
         update_text!(siv, names::COMMITING_TX, format!("{}", self.tx_commiting));
         update_text!(siv, names::REJECTED_TX, format!("{}", self.tx_rejected));
-        update_text!(siv, names::CPU, format!("{:.1}%", self.cpu_percent));
-        update_text!(
-            siv,
-            names::RAM,
-            format!(
-                "{:.1}GB / {:.1}GB",
-                self.ram_used as f64 / 1024.0 / 1024.0 / 1024.0,
-                self.ram_total as f64 / 1024.0 / 1024.0 / 1024.0
-            )
-        );
-        update_text!(
-            siv,
-            names::DISK_USAGE,
-            format!(
-                "{:.0}GB / {:.0}GB ({:.2}%)",
-                self.disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
-                self.disk_total as f64 / 1024.0 / 1024.0 / 1024.0,
-                (self.disk_used as f64 / self.disk_total as f64 * 100.0)
-            )
-        );
+
         update_text!(
             siv,
             names::AVERAGE_FEE_RATE,
@@ -339,14 +372,10 @@ impl DashboardData for OverviewDashboardData {
         let tx_pool_info = client
             .tx_pool_info()
             .with_context(|| anyhow!("Unable to get tx pool info"))?;
-        let fs_stats = fs2::statvfs(std::env::current_exe()?)?;
         let fee_rate_statistics = client
             .get_fee_rate_statistics(None)
             .with_context(|| anyhow!("Unable to get fee rate statistics"))?;
 
-        let mut system = System::new_all();
-        system.refresh_cpu_usage();
-        system.refresh_memory();
         let tip_header = client
             .get_tip_header()
             .with_context(|| anyhow!("Unable to get tip header"))?;
@@ -361,11 +390,6 @@ impl DashboardData for OverviewDashboardData {
             average_latency: -1,
             inbound_peers,
             outbound_peers,
-            cpu_percent: system.global_cpu_usage() as f64,
-            disk_total: fs_stats.total_space(),
-            disk_used: (fs_stats.total_space() - fs_stats.free_space()),
-            ram_total: system.total_memory(),
-            ram_used: system.used_memory(),
             tx_pending: tx_pool_info.pending.value(),
             tx_proposed: tx_pool_info.proposed.value(),
             tx_commiting: 0,
