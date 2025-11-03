@@ -222,7 +222,7 @@ fn main() -> anyhow::Result<()> {
                 tx.send(SyncRequest::RequestSync {
                     pop_layer_at_end: false,
                 })
-                .unwrap();
+                .ok();
                 std::thread::sleep(Duration::from_millis(300));
             }
         });

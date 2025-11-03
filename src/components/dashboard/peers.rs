@@ -118,9 +118,18 @@ impl UpdateToView for PeersDashboardData {
                 self.connections_in
             )
         );
-        let avg_latency =
-            self.peers.iter().map(|x| x.latency).sum::<u64>() / self.peers.len() as u64;
-        update_text!(siv, AVG_LATENCY, format!("{} ms", avg_latency));
+        update_text!(
+            siv,
+            AVG_LATENCY,
+            if self.peers.is_empty() {
+                format!("N/A")
+            } else {
+                format!(
+                    "{} ms",
+                    self.peers.iter().map(|x| x.latency).sum::<u64>() / self.peers.len() as u64
+                )
+            }
+        );
         siv.call_on_name(PEERS_TABLE, |s: &mut TableView<PeersItem, PeersColumn>| {
             let selected_row = s.row();
             s.clear();

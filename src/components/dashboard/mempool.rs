@@ -281,7 +281,7 @@ pub struct MempoolDashboardData {
     pending_tx: u64,
     proposed_tx: u64,
     commiting_tx: u64,
-    avg_fee_rate: u64,
+    avg_fee_rate: Option<u64>,
     tx_in: usize,
     tx_out: usize,
     average_block_time: f64,
@@ -310,7 +310,7 @@ impl DashboardData for MempoolDashboardData {
             pending_tx: tx_pool_info.pending.value(),
             proposed_tx: tx_pool_info.proposed.value(),
             commiting_tx: 0,
-            avg_fee_rate: fee_rate_statistics.unwrap().mean.value(),
+            avg_fee_rate: fee_rate_statistics.map(|x| x.mean.value()),
             tx_in: 0,
             tx_out: 0,
             average_block_time,
@@ -340,7 +340,10 @@ impl UpdateToView for MempoolDashboardData {
         update_text!(
             siv,
             AVG_FEE_RATE,
-            format!("{} shannons/KB", self.avg_fee_rate)
+            match self.avg_fee_rate {
+                None => format!("N/A"),
+                Some(v) => format!("{} shannons/KB", v),
+            }
         );
         update_text!(siv, TX_IN, format!("{} tx/s", self.tx_in));
         update_text!(siv, TX_OUT, format!("{} tx/s", self.tx_out));

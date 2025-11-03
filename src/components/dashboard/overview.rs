@@ -311,7 +311,7 @@ pub struct OverviewDashboardData {
     // in Bytes
     pub total_pool_size: i64,
     // shannons per KB
-    pub average_fee_rate: f64,
+    pub average_fee_rate: Option<u64>,
 
     pub epoch: u64,
     pub epoch_block: u64,
@@ -356,7 +356,10 @@ impl UpdateToView for OverviewDashboardData {
         update_text!(
             siv,
             names::AVERAGE_FEE_RATE,
-            format!("{} shannons/KB", self.average_fee_rate)
+            match self.average_fee_rate {
+                None => format!("N/A"),
+                Some(v) => format!("{} shannons/KB", v),
+            }
         );
         update_text!(
             siv,
@@ -421,7 +424,7 @@ impl DashboardData for OverviewDashboardData {
             tx_commiting: 0,
             tx_rejected: 0,
             total_pool_size: -1,
-            average_fee_rate: fee_rate_statistics.unwrap().mean.value() as f64,
+            average_fee_rate: fee_rate_statistics.map(|x| x.mean.value()),
             epoch,
             epoch_block,
             epoch_block_count,
