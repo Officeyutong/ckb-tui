@@ -84,6 +84,9 @@ pub struct OverviewDashboardState {
     pub ram_used: u64,
     pub disk_used: u64,
     pub disk_total: u64,
+
+    pub difficulty: f64,
+    pub hash_rate: f64,
 }
 
 impl OverviewDashboardState {
@@ -148,6 +151,8 @@ impl OverviewDashboardState {
             disk_used,
             ram_total,
             ram_used,
+            difficulty: 0.0,
+            hash_rate: 0.0,
         })
     }
     fn get_overview_data(&self) -> anyhow::Result<Overview> {
@@ -166,6 +171,18 @@ impl DashboardState for OverviewDashboardState {
         if self.cpu_history.len() > 20 {
             self.cpu_history.dequeue();
         }
+        self.hash_rate = overview_data
+            .mining
+            .hash_rate
+            .to_string()
+            .parse::<f64>()
+            .unwrap();
+        self.difficulty = overview_data
+            .mining
+            .difficulty
+            .to_string()
+            .parse::<f64>()
+            .unwrap();
         let now = chrono::Local::now();
         let diff_secs = ((now - self.last_update).num_milliseconds() as f64) / 1e3;
         {
@@ -268,6 +285,16 @@ impl UpdateToView for OverviewDashboardState {
                 (self.disk_used as f64 / self.disk_total as f64 * 100.0)
             )
         );
+        update_text!(
+            siv,
+            names::DIFFICULTY,
+            format!("{:.2} EH", self.difficulty / 1000_000_000_000_000.0)
+        );
+        update_text!(
+            siv,
+            names::HASH_RATE,
+            format!("{:.2} MH/s", self.hash_rate / 1000000.0)
+        );
     }
 }
 
@@ -283,9 +310,6 @@ pub struct OverviewDashboardData {
     pub tx_rejected: u64,
     // in Bytes
     pub total_pool_size: i64,
-    pub difficulty: f64,
-    pub hash_rate: u64,
-
     // shannons per KB
     pub average_fee_rate: f64,
 
@@ -314,8 +338,7 @@ impl UpdateToView for OverviewDashboardData {
             names::AVERAGE_LATENCY,
             format!("{}ms", self.average_latency)
         );
-        update_text!(siv, names::DIFFICULTY, format!("{:.2} EH", self.difficulty));
-        update_text!(siv, names::HASH_RATE, format!("{:.2} PH/s", self.hash_rate));
+
         update_text!(
             siv,
             names::TOTAL_POOL_SIZE,
@@ -398,8 +421,6 @@ impl DashboardData for OverviewDashboardData {
             tx_commiting: 0,
             tx_rejected: 0,
             total_pool_size: -1,
-            difficulty: -1.0,
-            hash_rate: 0,
             average_fee_rate: fee_rate_statistics.unwrap().mean.value() as f64,
             epoch,
             epoch_block,

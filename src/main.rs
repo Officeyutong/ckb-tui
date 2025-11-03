@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
     siv.add_global_callback('~', cursive::Cursive::toggle_debug_console);
     let loading_variable = Arc::new(AtomicBool::new(false));
 
-    let tx = {
+    let sync_request_tx = {
         let (tx, rx) = std::sync::mpsc::channel::<SyncRequest>();
         let cb_sink = siv.cb_sink().clone();
         let loading_variable = loading_variable.clone();
@@ -141,7 +141,7 @@ fn main() -> anyhow::Result<()> {
         tx
     };
     {
-        let tx = tx.clone();
+        let tx = sync_request_tx.clone();
         siv.add_global_callback('r', move |siv| {
             if loading_variable.load(std::sync::atomic::Ordering::SeqCst) {
                 return;
@@ -162,7 +162,7 @@ fn main() -> anyhow::Result<()> {
     }
     let event_sender = {
         let (event_tx, event_rx) = mpsc::channel::<TUIEvent>();
-        let tx = tx.clone();
+        let tx = sync_request_tx.clone();
         let cb_sink = siv.cb_sink().clone();
         std::thread::spawn(move || {
             let mut overview_state = OverviewDashboardState::new(client.clone()).unwrap();
@@ -228,13 +228,13 @@ fn main() -> anyhow::Result<()> {
         });
         event_tx
     };
-    tx.send(SyncRequest::RequestSync {
+    sync_request_tx.send(SyncRequest::RequestSync {
         pop_layer_at_end: false,
     })
     .unwrap();
     siv.set_autorefresh(true);
     siv.add_layer(dashboard(event_sender));
     siv.run();
-    tx.send(SyncRequest::Stop).unwrap();
+    sync_request_tx.send(SyncRequest::Stop).ok();
     Ok(())
 }
