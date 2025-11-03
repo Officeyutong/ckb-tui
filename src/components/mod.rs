@@ -25,7 +25,7 @@ pub trait DashboardData: UpdateToView {
 
 pub trait DashboardState: Sized + Clone + UpdateToView {
     fn update_state(&mut self) -> anyhow::Result<()>;
-    fn accept_event(&mut self,_event: &TUIEvent) {}
+    fn accept_event(&mut self, _event: &TUIEvent) {}
 }
 
 pub fn extract_epoch(epoch_field: u64) -> (u64, u64, u64) {

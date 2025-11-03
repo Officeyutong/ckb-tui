@@ -169,7 +169,7 @@ fn main() -> anyhow::Result<()> {
             let mut blockchain_state = BlockchainDashboardState::new(client.clone());
             let mut mempool_state = MempoolDashboardState::new(args.tcp_url.clone());
             let mut logs_state = LogsDashboardState::new();
-            
+
             loop {
                 cb_sink
                     .send(Box::new(|siv| set_loading(siv, true)))

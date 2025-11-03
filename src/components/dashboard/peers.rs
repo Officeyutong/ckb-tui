@@ -144,6 +144,7 @@ impl DashboardData for PeersDashboardData {
         &mut self,
         client: &CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
+        log::info!("Updating: PeersDashboardData");
         let peers = client
             .get_peers()
             .with_context(|| anyhow!("Unable to get peers"))?;
@@ -178,7 +179,7 @@ impl DashboardData for PeersDashboardData {
                 })
                 .collect(),
         };
-
+        log::info!("Updated: PeersDashboardData");
         Ok(Box::new(self.clone()))
     }
 }

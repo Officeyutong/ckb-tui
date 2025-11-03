@@ -18,8 +18,8 @@ use cursive::{
 };
 use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
-use tokio::net::TcpStream;
 use std::sync::mpsc;
+use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 
 use crate::components::DashboardState;
@@ -292,6 +292,7 @@ impl DashboardData for MempoolDashboardData {
         &mut self,
         client: &CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
+        log::info!("Updating: MempoolDashboardData");
         let tx_pool_info = client
             .tx_pool_info()
             .with_context(|| anyhow!("Unable to get tx pool info"))?;
@@ -314,6 +315,7 @@ impl DashboardData for MempoolDashboardData {
             tx_out: 0,
             average_block_time,
         };
+        log::info!("Updated: PeersDashboardData");
         Ok(Box::new(self.clone()))
     }
     fn should_update(&self) -> bool {

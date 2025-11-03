@@ -147,7 +147,7 @@ impl OverviewDashboardState {
             disk_total,
             disk_used,
             ram_total,
-            ram_used
+            ram_used,
         })
     }
     fn get_overview_data(&self) -> anyhow::Result<Overview> {
@@ -157,6 +157,7 @@ impl OverviewDashboardState {
 
 impl DashboardState for OverviewDashboardState {
     fn update_state(&mut self) -> anyhow::Result<()> {
+        log::info!("Updating: OverviewDashboardState");
         let overview_data = self.get_overview_data()?;
 
         self.cpu_history
@@ -203,6 +204,7 @@ impl DashboardState for OverviewDashboardState {
         }
 
         self.last_update = chrono::Local::now();
+        log::info!("Updated: OverviewDashboardState");
         Ok(())
     }
 }
@@ -361,6 +363,7 @@ impl DashboardData for OverviewDashboardData {
         &mut self,
         client: &CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
+        log::info!("Updating: OverviewDashboardData");
         let peers = client
             .get_peers()
             .with_context(|| anyhow!("Unable to get peers"))?
@@ -404,7 +407,7 @@ impl DashboardData for OverviewDashboardData {
             average_block_time,
             estimated_epoch_time,
         };
-
+        log::info!("Updated: OverviewDashboardData");
         Ok(Box::new(self.clone()))
     }
 }

@@ -53,6 +53,7 @@ impl DashboardData for GeneralDashboardData {
         &mut self,
         client: &CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
+        log::info!("Updating: GeneralDashboardData");
         let block_chain_info = client
             .get_blockchain_info()
             .with_context(|| anyhow!("Unable to get block chain info"))?;
@@ -65,7 +66,7 @@ impl DashboardData for GeneralDashboardData {
             },
             version: format!("unknown version"),
         };
-
+        log::info!("Updated: GeneralDashboardData");
         Ok(Box::new(self.clone()))
     }
 }
@@ -93,31 +94,11 @@ pub fn dashboard(event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + u
             .child(TextView::new(" ").center().with_name(REFRESHING_LABEL))
             .child(
                 LinearLayout::horizontal()
-                    .child(
-                        tab_selector
-                            .button(0, "Overview")
-                            .fixed_width(15)
-                    )
-                    .child(
-                        tab_selector
-                            .button(1, "Blockchain")
-                            .fixed_width(17)
-                    )
-                    .child(
-                        tab_selector
-                            .button(2, "Mempool")
-                            .fixed_width(15)
-                    )
-                    .child(
-                        tab_selector
-                            .button(3, "Peers")
-                            .fixed_width(15)
-                    )
-                    .child(
-                        tab_selector
-                            .button(4, "Logs")
-                            .fixed_width(15)
-                    )
+                    .child(tab_selector.button(0, "Overview").fixed_width(15))
+                    .child(tab_selector.button(1, "Blockchain").fixed_width(17))
+                    .child(tab_selector.button(2, "Mempool").fixed_width(15))
+                    .child(tab_selector.button(3, "Peers").fixed_width(15))
+                    .child(tab_selector.button(4, "Logs").fixed_width(15))
                     .align_center(),
             )
             .child(basic_info_dashboard(event_sender.clone()))

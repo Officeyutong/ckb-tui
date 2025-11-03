@@ -10,13 +10,21 @@ use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
 
 use crate::{
+    CURRENT_TAB,
     components::{
-        dashboard::{blockchain::names::{
-            ALGORITHM, AVERAGE_BLOCK_TIME, BLOCK_HEIGHT, DIFFICULTY, EPOCH, ESTIMATED_EPOCH_TIME,
-            HASH_RATE, LIVE_CELLS, LIVE_CELLS_HISTORY, OCCUPIED_CAPACITY,
-            OCCUPIED_CAPACITY_HISTORY, SCRIPT_TABLE,
-        }, TUIEvent}, extract_epoch, get_average_block_time_and_estimated_epoch_time, DashboardData, DashboardState, UpdateToView
-    }, declare_names, update_text, utils::bar_chart::SimpleBarChart, CURRENT_TAB
+        DashboardData, DashboardState, UpdateToView,
+        dashboard::{
+            TUIEvent,
+            blockchain::names::{
+                ALGORITHM, AVERAGE_BLOCK_TIME, BLOCK_HEIGHT, DIFFICULTY, EPOCH,
+                ESTIMATED_EPOCH_TIME, HASH_RATE, LIVE_CELLS, LIVE_CELLS_HISTORY, OCCUPIED_CAPACITY,
+                OCCUPIED_CAPACITY_HISTORY, SCRIPT_TABLE,
+            },
+        },
+        extract_epoch, get_average_block_time_and_estimated_epoch_time,
+    },
+    declare_names, update_text,
+    utils::bar_chart::SimpleBarChart,
 };
 
 const TEST_DATA: [f64; 10] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
@@ -160,6 +168,7 @@ impl DashboardData for BlockchainDashboardData {
         &mut self,
         client: &ckb_sdk::CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
+        log::info!("Updating: BlockchainDashboardData");
         let tip_header = client
             .get_tip_header()
             .with_context(|| anyhow!("Unable to get tip header"))?;
@@ -194,6 +203,7 @@ impl DashboardData for BlockchainDashboardData {
             hash_rate: -1.0,
             scripts,
         };
+        log::info!("Updated: MempoolDashboardData");
         Ok(Box::new(self.clone()))
     }
 }
