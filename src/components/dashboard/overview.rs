@@ -214,7 +214,11 @@ impl DashboardState for OverviewDashboardState {
             let total_block = sync_state.best_known_block_number.value();
             // blocks per sec
             let block_sync_speed = (current_block - self.current_block) as f64 / diff_secs;
-            let estimated_seconds = (total_block - current_block) as f64 / block_sync_speed;
+            let estimated_seconds = if total_block > current_block {
+                (total_block - current_block) as f64 / block_sync_speed
+            } else {
+                0.0
+            };
             self.current_block = current_block;
             self.total_block = total_block;
             self.estimated_time_left = estimated_seconds.ceil() as u64;
@@ -251,7 +255,7 @@ impl UpdateToView for OverviewDashboardState {
         );
         siv.call_on_name(names::SYNCING_PROGRESS, |view: &mut ProgressBar| {
             view.set_value(
-                ((self.current_block as f64 / self.total_block as f64) * 100.0) as usize,
+                (((self.current_block as f64 / self.total_block as f64) * 100.0) as usize).min(100),
             );
         });
         update_text!(
@@ -372,12 +376,12 @@ impl UpdateToView for OverviewDashboardData {
         update_text!(
             siv,
             names::ESTIMATED_EPOCH_TIME,
-            format!("{}min", (self.estimated_epoch_time / 60.0).ceil())
+            format!("{} min", (self.estimated_epoch_time / 60.0).ceil())
         );
         update_text!(
             siv,
             names::AVERAGE_BLOCK_TIME,
-            format!("{:.2}s", self.average_block_time)
+            format!("{:.2} s", self.average_block_time)
         );
     }
 }

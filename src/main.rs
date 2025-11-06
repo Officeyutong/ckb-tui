@@ -228,10 +228,11 @@ fn main() -> anyhow::Result<()> {
         });
         event_tx
     };
-    sync_request_tx.send(SyncRequest::RequestSync {
-        pop_layer_at_end: false,
-    })
-    .unwrap();
+    sync_request_tx
+        .send(SyncRequest::RequestSync {
+            pop_layer_at_end: false,
+        })
+        .unwrap();
     siv.set_autorefresh(true);
     siv.add_layer(dashboard(event_sender));
     siv.run();

@@ -19,3 +19,17 @@ macro_rules! declare_names {
         }
     };
 }
+
+pub fn shorten_hex(hex: impl AsRef<str>, keep_prefix: usize, keep_suffix: usize) -> String {
+    let hex = hex.as_ref();
+    if hex.len() <= keep_prefix + keep_suffix {
+        return hex.to_string();
+    }
+    let prefix = if hex.starts_with("0x") { "" } else { "0x" };
+    format!(
+        "{}{}...{}",
+        prefix,
+        &hex[..keep_prefix],
+        &hex[hex.len() - keep_suffix..]
+    )
+}

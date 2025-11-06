@@ -27,6 +27,7 @@ use crate::components::dashboard::TUIEvent;
 use crate::components::dashboard::mempool::names::SUBSCRIBE_WARNING;
 use crate::components::get_average_block_time_and_estimated_epoch_time;
 use crate::components::map_pool_transaction_to_reason;
+use crate::utils::shorten_hex;
 use crate::{
     CURRENT_TAB,
     components::{
@@ -83,7 +84,7 @@ fn update_latest_tx(state: &MempoolDashboatdInnerState, tx: PoolTransactionEntry
     let mut guard = state.latest_incoming_txs.write().unwrap();
     guard
         .queue(LatestIncomingTxItem {
-            tx_hash: tx.transaction.hash.to_string(),
+            tx_hash: shorten_hex(tx.transaction.hash.to_string(), 10, 11),
             time: Utc
                 .timestamp_millis_opt(tx.timestamp.value() as i64)
                 .unwrap()

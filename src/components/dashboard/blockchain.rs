@@ -1,10 +1,11 @@
 use std::sync::mpsc;
 
 use anyhow::{Context, anyhow};
+use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
-    views::{LinearLayout, NamedView, Panel, TextView},
+    views::{Dialog, LinearLayout, NamedView, Panel, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
@@ -24,7 +25,7 @@ use crate::{
         extract_epoch, get_average_block_time_and_estimated_epoch_time,
     },
     declare_names, update_text,
-    utils::bar_chart::SimpleBarChart,
+    utils::{bar_chart::SimpleBarChart, shorten_hex},
 };
 
 const TEST_DATA: [f64; 10] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
@@ -54,6 +55,7 @@ pub struct BlockchainDashboardState {
     occupied_capacity_history: Queue<f64>,
     max_occupied_capacity: u64,
     occupied_capacity: u64,
+    client: CkbRpcClient,
 }
 
 impl UpdateToView for BlockchainDashboardState {
@@ -66,7 +68,7 @@ impl UpdateToView for BlockchainDashboardState {
         update_text!(
             siv,
             OCCUPIED_CAPACITY,
-            format!("{} CKB", self.occupied_capacity)
+            format!("{} CKB ", self.occupied_capacity)
         );
         siv.call_on_name(OCCUPIED_CAPACITY_HISTORY, |view: &mut SimpleBarChart| {
             view.set_max_value(self.max_occupied_capacity as f64);
@@ -77,14 +79,28 @@ impl UpdateToView for BlockchainDashboardState {
 
 impl DashboardState for BlockchainDashboardState {
     fn update_state(&mut self) -> anyhow::Result<()> {
+        let tip_header = self
+            .client
+            .get_tip_header()
+            .with_context(|| anyhow!("Unable to get tip header"))?;
+        let occupied_capacity =
+            u64::from_le_bytes(tip_header.inner.dao.0[24..32].try_into().unwrap());
+        self.max_occupied_capacity = self.max_occupied_capacity.max(occupied_capacity);
+        self.occupied_capacity = occupied_capacity;
+        self.occupied_capacity_history
+            .queue(occupied_capacity as f64)
+            .unwrap();
+        if self.occupied_capacity_history.len() > 20 {
+            self.occupied_capacity_history.dequeue();
+        }
         Ok(())
     }
 }
 
 impl BlockchainDashboardState {
-    pub fn new(_client: CkbRpcClient) -> Self {
+    pub fn new(client: CkbRpcClient) -> Self {
         Self {
-            // client,
+            client,
             live_cells: 1,
             live_cells_history: Queue::default(),
             max_live_cells: 1,
@@ -128,7 +144,7 @@ impl TableViewItem<ScriptColumn> for ScriptItem {
                 Ok(_) => String::from("✓ OK"),
                 Err(e) => e.clone(),
             },
-            ScriptColumn::CodeHash => self.code_hash.clone(),
+            ScriptColumn::CodeHash => shorten_hex(&self.code_hash, 6, 5),
         }
     }
 
@@ -160,6 +176,12 @@ pub struct BlockchainDashboardData {
     scripts: Vec<ScriptItem>,
 }
 
+impl BlockchainDashboardData {
+    fn get_overview_data(&self, client: &CkbRpcClient) -> anyhow::Result<Overview> {
+        Ok(client.post::<(), Overview>("get_overview", ())?)
+    }
+}
+
 impl DashboardData for BlockchainDashboardData {
     fn should_update(&self) -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 1
@@ -175,20 +197,41 @@ impl DashboardData for BlockchainDashboardData {
         let (epoch, epoch_block, epoch_block_count) = extract_epoch(tip_header.inner.epoch.value());
         let (average_block_time, estimated_epoch_time) =
             get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
+        let overview_data = self.get_overview_data(client)?;
+        let consensus = client
+            .get_consensus()
+            .with_context(|| anyhow!("Unable to get consensus"))?;
+
         let scripts = {
             let mut scripts = vec![];
-            for i in 0..20 {
+            if let Some(hash) = consensus.secp256k1_blake160_sighash_all_type_hash {
                 scripts.push(ScriptItem {
-                    name: format!("Script {}", i),
-                    script_type: if i % 2 == 0 {
-                        ScriptType::Lock
-                    } else {
-                        ScriptType::Type
-                    },
+                    name: String::from("secp256k1_blake160_sighash_all"),
+                    script_type: ScriptType::Lock,
                     integrity: Ok(()),
-                    code_hash: format!("Code Hash {}", i),
+                    code_hash: hash.to_string(),
                 });
             }
+            if let Some(hash) = consensus.secp256k1_blake160_multisig_all_type_hash {
+                scripts.push(ScriptItem {
+                    name: String::from("secp256k1_blake160_multisig_all"),
+                    script_type: ScriptType::Lock,
+                    integrity: Ok(()),
+                    code_hash: hash.to_string(),
+                });
+            }
+            scripts.push(ScriptItem {
+                name: String::from("dao"),
+                script_type: ScriptType::Lock,
+                integrity: Ok(()),
+                code_hash: consensus.dao_type_hash.to_string(),
+            });
+            scripts.push(ScriptItem {
+                name: String::from("type_id"),
+                script_type: ScriptType::Type,
+                integrity: Ok(()),
+                code_hash: consensus.type_id_code_hash.to_string(),
+            });
             scripts
         };
         *self = Self {
@@ -199,8 +242,18 @@ impl DashboardData for BlockchainDashboardData {
             average_block_time,
             block_height: tip_header.inner.number.value(),
             algorithm: "Unknown".to_string(),
-            difficulty: -1.0,
-            hash_rate: -1.0,
+            difficulty: overview_data
+                .mining
+                .difficulty
+                .to_string()
+                .parse::<f64>()
+                .unwrap(),
+            hash_rate: overview_data
+                .mining
+                .hash_rate
+                .to_string()
+                .parse::<f64>()
+                .unwrap(),
             scripts,
         };
         log::info!("Updated: MempoolDashboardData");
@@ -230,8 +283,8 @@ impl UpdateToView for BlockchainDashboardData {
             format!("{:.2} s", self.average_block_time)
         );
         update_text!(siv, ALGORITHM, format!("{}", self.algorithm));
-        update_text!(siv, DIFFICULTY, format!("{:.2} EH", self.difficulty));
-        update_text!(siv, HASH_RATE, format!("{:.2} PH/s", self.hash_rate));
+        update_text!(siv, DIFFICULTY, format!("{:.2} EH", self.difficulty / 1e15));
+        update_text!(siv, HASH_RATE, format!("{:.2} MH/s", self.hash_rate / 1e6));
         siv.call_on_name(
             SCRIPT_TABLE,
             |view: &mut TableView<ScriptItem, ScriptColumn>| {
@@ -298,7 +351,8 @@ pub fn blockchain_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoB
                                 LinearLayout::horizontal()
                                     .child(TextView::new("• Hash Rate:").min_width(20))
                                     .child(TextView::empty().with_name(HASH_RATE)),
-                            ),
+                            )
+                            .child(TextView::new(" ")),
                     )
                     .min_width(50)
                     .scrollable(),
@@ -348,10 +402,57 @@ pub fn blockchain_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoB
                             .column(ScriptColumn::ScriptType, "Lock/Type Script", |c| c)
                             .column(ScriptColumn::Integrity, "Integrity Check", |c| c)
                             .column(ScriptColumn::CodeHash, "Code Hash", |c| c)
+                            .on_submit(|siv, _row, index| {
+                                let line = siv
+                                    .call_on_name(
+                                        SCRIPT_TABLE,
+                                        |view: &mut TableView<ScriptItem, ScriptColumn>| {
+                                            view.borrow_item(index).unwrap().clone()
+                                        },
+                                    )
+                                    .unwrap();
+                                siv.add_layer(script_detail_modal(&line));
+                            })
                             .with_name(SCRIPT_TABLE)
-                            .min_size((50, 20)),
+                            .min_size((100, 20)),
                     ),
             )
             .scrollable(),
         )
+}
+
+fn script_detail_modal(data: &ScriptItem) -> impl IntoBoxedView + use<> {
+    Dialog::around(
+        LinearLayout::vertical()
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• System Script Name:").min_width(25))
+                    .child(TextView::new(&data.name)),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Code Hash:").min_width(25))
+                    .child(TextView::new(&data.code_hash)),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Integrity Name:").min_width(25))
+                    .child(TextView::new(&match &data.integrity {
+                        Ok(()) => String::from("Ok"),
+                        Err(e) => e.to_string(),
+                    })),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Script Type:").min_width(25))
+                    .child(TextView::new(match &data.script_type {
+                        ScriptType::Lock => "Lock",
+                        ScriptType::Type => "Type",
+                    })),
+            ),
+    )
+    .title("Details of Script")
+    .button("Close", |siv| {
+        siv.pop_layer();
+    })
 }
