@@ -10,6 +10,7 @@ use chrono::TimeZone;
 use chrono::Utc;
 use ckb_jsonrpc_types::PoolTransactionEntry;
 use ckb_jsonrpc_types::PoolTransactionReject;
+use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::view::Scrollable;
 use cursive::{
@@ -303,14 +304,17 @@ impl DashboardData for MempoolDashboardData {
         let tip_header = client
             .get_tip_header()
             .with_context(|| anyhow!("Unable to get tip header"))?;
+        let overview: Overview = client
+            .post("get_overview", ())
+            .with_context(|| anyhow!("Unable to get overview info"))?;
         let (average_block_time, _) =
             get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
         *self = Self {
             total_pool_size_in_tx: tx_pool_info.total_tx_size.value(),
             total_pool_size_in_bytes: 0,
-            pending_tx: tx_pool_info.pending.value(),
-            proposed_tx: tx_pool_info.proposed.value(),
-            commiting_tx: 0,
+            pending_tx: overview.pool.pending.value(),
+            proposed_tx: overview.pool.proposed.value(),
+            commiting_tx: overview.pool.committing.value(),
             avg_fee_rate: fee_rate_statistics.map(|x| x.mean.value()),
             tx_in: 0,
             tx_out: 0,

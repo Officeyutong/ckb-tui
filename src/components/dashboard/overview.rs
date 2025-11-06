@@ -312,8 +312,10 @@ pub struct OverviewDashboardData {
     pub tx_proposed: u64,
     pub tx_commiting: u64,
     pub tx_rejected: u64,
-    // in Bytes
-    pub total_pool_size: i64,
+    // in txs
+    pub total_pool_size: u64,
+    // in bytes
+    pub total_pool_size_in_bytes: u64,
     // shannons per KB
     pub average_fee_rate: Option<u64>,
 
@@ -348,8 +350,8 @@ impl UpdateToView for OverviewDashboardData {
             names::TOTAL_POOL_SIZE,
             format!(
                 "{} txs ({:.0} MB)",
-                self.tx_pending + self.tx_commiting + self.tx_proposed,
-                self.total_pool_size as f64 / 1024.0 / 1024.0
+                self.total_pool_size,
+                self.total_pool_size_in_bytes as f64 / 1024.0 / 1024.0
             )
         );
         update_text!(siv, names::PENDING_TX, format!("{}", self.tx_pending));
@@ -418,22 +420,25 @@ impl DashboardData for OverviewDashboardData {
 
         let (average_block_time, estimated_epoch_time) =
             get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
-
+        let overview_data: Overview = client
+            .post("get_overview", ())
+            .with_context(|| anyhow!("Unable to get overview info"))?;
         *self = OverviewDashboardData {
             average_latency: -1,
             inbound_peers,
             outbound_peers,
-            tx_pending: tx_pool_info.pending.value(),
-            tx_proposed: tx_pool_info.proposed.value(),
-            tx_commiting: 0,
+            tx_pending: overview_data.pool.pending.value(),
+            tx_proposed: overview_data.pool.proposed.value(),
+            tx_commiting: overview_data.pool.committing.value(),
             tx_rejected: 0,
-            total_pool_size: -1,
+            total_pool_size: tx_pool_info.total_tx_size.value(),
             average_fee_rate: fee_rate_statistics.map(|x| x.mean.value()),
             epoch,
             epoch_block,
             epoch_block_count,
             average_block_time,
             estimated_epoch_time,
+            total_pool_size_in_bytes: 0,
         };
         log::info!("Updated: OverviewDashboardData");
         Ok(Box::new(self.clone()))

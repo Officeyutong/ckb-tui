@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use std::{sync::mpsc, u64};
 
 use anyhow::{Context, anyhow};
 use ckb_jsonrpc_types_new::Overview;
@@ -51,9 +51,11 @@ declare_names!(
 pub struct BlockchainDashboardState {
     live_cells_history: Queue<f64>,
     max_live_cells: u64,
+    min_live_cells: u64,
     live_cells: u64,
     occupied_capacity_history: Queue<f64>,
     max_occupied_capacity: u64,
+    min_occupied_capacity: u64,
     occupied_capacity: u64,
     client: CkbRpcClient,
 }
@@ -63,6 +65,7 @@ impl UpdateToView for BlockchainDashboardState {
         update_text!(siv, LIVE_CELLS, format!("{}", self.live_cells));
         siv.call_on_name(LIVE_CELLS_HISTORY, |view: &mut SimpleBarChart| {
             view.set_max_value(self.max_live_cells as f64);
+            view.set_diff_value(Some(self.min_live_cells as f64 * 0.9));
             view.set_data(self.live_cells_history.vec()).unwrap();
         });
         update_text!(
@@ -72,6 +75,7 @@ impl UpdateToView for BlockchainDashboardState {
         );
         siv.call_on_name(OCCUPIED_CAPACITY_HISTORY, |view: &mut SimpleBarChart| {
             view.set_max_value(self.max_occupied_capacity as f64);
+            view.set_diff_value(Some(self.min_occupied_capacity as f64 * 0.9));
             view.set_data(self.occupied_capacity_history.vec()).unwrap();
         });
     }
@@ -79,19 +83,29 @@ impl UpdateToView for BlockchainDashboardState {
 
 impl DashboardState for BlockchainDashboardState {
     fn update_state(&mut self) -> anyhow::Result<()> {
-        let tip_header = self
+        let overview: Overview = self
             .client
-            .get_tip_header()
-            .with_context(|| anyhow!("Unable to get tip header"))?;
-        let occupied_capacity =
-            u64::from_le_bytes(tip_header.inner.dao.0[24..32].try_into().unwrap());
+            .post("get_overview", ())
+            .with_context(|| anyhow!("Unable to get overview info"))?;
+        let occupied_capacity = overview.cells.total_occupied_capacities.value();
+
         self.max_occupied_capacity = self.max_occupied_capacity.max(occupied_capacity);
+        self.min_occupied_capacity = self.min_occupied_capacity.min(occupied_capacity);
         self.occupied_capacity = occupied_capacity;
         self.occupied_capacity_history
             .queue(occupied_capacity as f64)
             .unwrap();
         if self.occupied_capacity_history.len() > 20 {
             self.occupied_capacity_history.dequeue();
+        }
+
+        let live_cells = overview.cells.estimate_live_cells_num.value();
+        self.max_live_cells = self.max_live_cells.max(live_cells);
+        self.min_live_cells = self.min_live_cells.min(live_cells);
+        self.live_cells = live_cells;
+        self.live_cells_history.queue(live_cells as f64).unwrap();
+        if self.live_cells_history.len() > 20 {
+            self.live_cells_history.dequeue();
         }
         Ok(())
     }
@@ -104,7 +118,9 @@ impl BlockchainDashboardState {
             live_cells: 1,
             live_cells_history: Queue::default(),
             max_live_cells: 1,
+            min_live_cells: u64::MAX,
             max_occupied_capacity: 1,
+            min_occupied_capacity: u64::MAX,
             occupied_capacity: 1,
             occupied_capacity_history: Default::default(),
         }
@@ -241,7 +257,7 @@ impl DashboardData for BlockchainDashboardData {
             estimated_epoch_time,
             average_block_time,
             block_height: tip_header.inner.number.value(),
-            algorithm: "Unknown".to_string(),
+            algorithm: "Eaglesong".to_string(),
             difficulty: overview_data
                 .mining
                 .difficulty
@@ -375,6 +391,7 @@ pub fn blockchain_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoB
                                 SimpleBarChart::new(&TEST_DATA).unwrap(),
                             )),
                     )
+                    .child(TextView::new(" "))
                     .child(
                         LinearLayout::horizontal()
                             .child(TextView::new("• Occupied Capacity:").min_width(22))

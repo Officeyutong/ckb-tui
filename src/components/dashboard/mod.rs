@@ -7,6 +7,7 @@ pub mod peers;
 use std::sync::mpsc;
 
 use anyhow::{Context, anyhow};
+use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     Cursive,
@@ -57,14 +58,16 @@ impl DashboardData for GeneralDashboardData {
         let block_chain_info = client
             .get_blockchain_info()
             .with_context(|| anyhow!("Unable to get block chain info"))?;
-
+        let overview_info: Overview = client
+            .post("get_overview", ())
+            .with_context(|| anyhow!("Unable to get overview info"))?;
         *self = Self {
             network_name: match block_chain_info.chain.as_str() {
                 "ckb" => "[Meepo Mainnet]".to_string(),
                 "ckb_testnet" => "[Mirana Testnet]".to_string(),
                 s => format!("[{}]", s),
             },
-            version: format!("unknown version"),
+            version: overview_info.version,
         };
         log::info!("Updated: GeneralDashboardData");
         Ok(Box::new(self.clone()))
