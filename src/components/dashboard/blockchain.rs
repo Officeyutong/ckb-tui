@@ -1,11 +1,12 @@
 use std::{sync::mpsc, u64};
 
 use anyhow::{Context, anyhow};
+use ckb_jsonrpc_types::Consensus;
 use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
-    views::{Dialog, LinearLayout, NamedView, Panel, TextView},
+    views::{Button, Dialog, LinearLayout, NamedView, Panel, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
@@ -58,6 +59,7 @@ pub struct BlockchainDashboardState {
     min_occupied_capacity: u64,
     occupied_capacity: u64,
     client: CkbRpcClient,
+    consensus: Option<Consensus>,
 }
 
 impl UpdateToView for BlockchainDashboardState {
@@ -82,6 +84,20 @@ impl UpdateToView for BlockchainDashboardState {
 }
 
 impl DashboardState for BlockchainDashboardState {
+    fn accept_event(&mut self, event: &TUIEvent) {
+        if let Some(consensus) = self.consensus.clone() {
+            match event {
+                TUIEvent::OpenConsensusModal(sender) => {
+                    sender
+                        .send(Box::new(move |siv| {
+                            siv.add_layer(consensus_modal(&consensus));
+                        }))
+                        .unwrap();
+                }
+                _ => {}
+            }
+        }
+    }
     fn update_state(&mut self) -> anyhow::Result<()> {
         let overview: Overview = self
             .client
@@ -107,6 +123,13 @@ impl DashboardState for BlockchainDashboardState {
         if self.live_cells_history.len() > 20 {
             self.live_cells_history.dequeue();
         }
+
+        self.consensus = Some(
+            self.client
+                .get_consensus()
+                .with_context(|| anyhow!("Unable to get consensus"))?,
+        );
+
         Ok(())
     }
 }
@@ -123,6 +146,7 @@ impl BlockchainDashboardState {
             min_occupied_capacity: u64::MAX,
             occupied_capacity: 1,
             occupied_capacity_history: Default::default(),
+            consensus: None,
         }
     }
 }
@@ -317,7 +341,7 @@ impl UpdateToView for BlockchainDashboardData {
     }
 }
 
-pub fn blockchain_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
+pub fn blockchain_dashboard(event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
     LinearLayout::vertical()
         .child(
             LinearLayout::horizontal()
@@ -368,7 +392,11 @@ pub fn blockchain_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoB
                                     .child(TextView::new("• Hash Rate:").min_width(20))
                                     .child(TextView::empty().with_name(HASH_RATE)),
                             )
-                            .child(TextView::new(" ")),
+                            .child(Button::new("Consensus", move |siv| {
+                                event_sender
+                                    .send(TUIEvent::OpenConsensusModal(siv.cb_sink().clone()))
+                                    .unwrap();
+                            })),
                     )
                     .min_width(50)
                     .scrollable(),
@@ -469,6 +497,66 @@ fn script_detail_modal(data: &ScriptItem) -> impl IntoBoxedView + use<> {
             ),
     )
     .title("Details of Script")
+    .button("Close", |siv| {
+        siv.pop_layer();
+    })
+}
+
+fn consensus_modal(data: &Consensus) -> impl IntoBoxedView + use<> {
+    Dialog::around(
+        LinearLayout::vertical()
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Initial primary epoch reward:").min_width(40))
+                    .child(TextView::new(format!(
+                        "{}",
+                        data.initial_primary_epoch_reward.value()
+                    ))),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Secondary epoch reward:").min_width(40))
+                    .child(TextView::new(format!(
+                        "{}",
+                        data.secondary_epoch_reward.value()
+                    ))),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Max block cycles:").min_width(40))
+                    .child(TextView::new(format!("{}", data.max_block_cycles))),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Cellbase maturity:").min_width(40))
+                    .child(TextView::new(format!("{}", data.cellbase_maturity.value()))),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Primary epoch reward halving interval:").min_width(40))
+                    .child(TextView::new(format!(
+                        "{}",
+                        data.primary_epoch_reward_halving_interval.value()
+                    ))),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Epoch duration target:").min_width(40))
+                    .child(TextView::new(format!(
+                        "{}",
+                        data.epoch_duration_target.value()
+                    ))),
+            )
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new("• Permanent difficulty in dummy:").min_width(40))
+                    .child(TextView::new(format!(
+                        "{}",
+                        data.permanent_difficulty_in_dummy
+                    ))),
+            ),
+    )
+    .title("Consensus")
     .button("Close", |siv| {
         siv.pop_layer();
     })

@@ -131,4 +131,5 @@ pub fn set_loading(siv: &mut Cursive, loading: bool) {
 }
 pub enum TUIEvent {
     FilterLogEvent(FilterLogOption),
+    OpenConsensusModal(cursive::CbSink)
 }

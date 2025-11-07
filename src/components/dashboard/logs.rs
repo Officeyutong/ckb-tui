@@ -120,6 +120,7 @@ impl DashboardState for LogsDashboardState {
             TUIEvent::FilterLogEvent(filter_log_option) => {
                 self.filter_option = filter_log_option.clone()
             }
+            _ => {}
         }
     }
 }

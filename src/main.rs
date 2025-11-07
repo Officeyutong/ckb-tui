@@ -223,7 +223,7 @@ fn main() -> anyhow::Result<()> {
                     pop_layer_at_end: false,
                 })
                 .ok();
-                std::thread::sleep(Duration::from_millis(1000));
+                std::thread::sleep(Duration::from_millis(500));
             }
         });
         event_tx
