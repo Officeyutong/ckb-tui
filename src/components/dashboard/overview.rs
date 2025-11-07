@@ -18,7 +18,7 @@ use crate::{
         dashboard::{
             TUIEvent,
             overview::names::{
-                AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITING_TX,
+                AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITTING_TX,
                 CONNECTED_PEERS, CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED,
                 DISK_USAGE, EPOCH, ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK,
                 PENDING_TX, PROPOSED_TX, RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
@@ -49,7 +49,7 @@ declare_names!(
     TOTAL_POOL_SIZE,
     PENDING_TX,
     PROPOSED_TX,
-    COMMITING_TX,
+    COMMITTING_TX,
     REJECTED_TX,
     CPU_HISTORY,
     DISK_SPEED,
@@ -285,11 +285,7 @@ impl UpdateToView for OverviewDashboardState {
                 (self.disk_used as f64 / self.disk_total as f64 * 100.0)
             )
         );
-        update_text!(
-            siv,
-            names::DIFFICULTY,
-            format!("{:x}", self.difficulty)
-        );
+        update_text!(siv, names::DIFFICULTY, format!("{:x}", self.difficulty));
         update_text!(
             siv,
             names::HASH_RATE,
@@ -306,10 +302,8 @@ pub struct OverviewDashboardData {
 
     pub tx_pending: u64,
     pub tx_proposed: u64,
-    pub tx_commiting: u64,
+    pub tx_committing: u64,
     pub tx_rejected: u64,
-    // in txs
-    pub total_pool_size: u64,
     // in bytes
     pub total_pool_size_in_bytes: u64,
     // shannons per KB
@@ -345,14 +339,14 @@ impl UpdateToView for OverviewDashboardData {
             siv,
             names::TOTAL_POOL_SIZE,
             format!(
-                "{} txs ({:.0} MB)",
-                self.total_pool_size,
+                "{} txs ({:.1} MB)",
+                self.tx_committing + self.tx_pending + self.tx_proposed,
                 self.total_pool_size_in_bytes as f64 / 1024.0 / 1024.0
             )
         );
         update_text!(siv, names::PENDING_TX, format!("{}", self.tx_pending));
         update_text!(siv, names::PROPOSED_TX, format!("{}", self.tx_proposed));
-        update_text!(siv, names::COMMITING_TX, format!("{}", self.tx_commiting));
+        update_text!(siv, names::COMMITTING_TX, format!("{}", self.tx_committing));
         update_text!(siv, names::REJECTED_TX, format!("{}", self.tx_rejected));
 
         update_text!(
@@ -400,9 +394,6 @@ impl DashboardData for OverviewDashboardData {
             .collect::<Vec<_>>();
         let outbound_peers = peers.iter().filter(|x| **x).count();
         let inbound_peers = peers.len() - outbound_peers;
-        let tx_pool_info = client
-            .tx_pool_info()
-            .with_context(|| anyhow!("Unable to get tx pool info"))?;
         let fee_rate_statistics = client
             .get_fee_rate_statistics(None)
             .with_context(|| anyhow!("Unable to get fee rate statistics"))?;
@@ -425,16 +416,15 @@ impl DashboardData for OverviewDashboardData {
             outbound_peers,
             tx_pending: overview_data.pool.pending.value(),
             tx_proposed: overview_data.pool.proposed.value(),
-            tx_commiting: overview_data.pool.committing.value(),
-            tx_rejected: 0,
-            total_pool_size: tx_pool_info.total_tx_size.value(),
+            tx_committing: overview_data.pool.committing.value(),
+            tx_rejected: overview_data.pool.total_recent_reject_num.value(),
             average_fee_rate: fee_rate_statistics.map(|x| x.mean.value()),
             epoch,
             epoch_block,
             epoch_block_count,
             average_block_time,
             estimated_epoch_time,
-            total_pool_size_in_bytes: 0,
+            total_pool_size_in_bytes: overview_data.pool.total_tx_size.value(),
         };
         log::info!("Updated: OverviewDashboardData");
         Ok(Box::new(self.clone()))
@@ -547,7 +537,7 @@ pub fn basic_info_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoB
                             .child(
                                 LinearLayout::horizontal()
                                     .child(TextView::new("    🟢 Committing:").min_width(20))
-                                    .child(TextView::empty().with_name(COMMITING_TX)),
+                                    .child(TextView::empty().with_name(COMMITTING_TX)),
                             )
                             .child(
                                 LinearLayout::horizontal()

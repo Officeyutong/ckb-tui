@@ -34,7 +34,7 @@ use crate::{
     components::{
         DashboardData, UpdateToView,
         dashboard::mempool::names::{
-            AVG_BLOCK_TIME, AVG_FEE_RATE, COMMITING, LATEST_INCOMING_TX_TABLE, PENDING, PROPOSED,
+            AVG_BLOCK_TIME, AVG_FEE_RATE, COMMITTING, LATEST_INCOMING_TX_TABLE, PENDING, PROPOSED,
             REJECTION_RATE, REJECTION_TABLE, TOTAL_POOL_SIZE, TOTAL_REJECTION, TX_IN, TX_OUT,
         },
     },
@@ -47,7 +47,7 @@ declare_names!(
     TOTAL_POOL_SIZE,
     PENDING,
     PROPOSED,
-    COMMITING,
+    COMMITTING,
     AVG_FEE_RATE,
     TX_IN,
     TX_OUT,
@@ -278,11 +278,10 @@ impl UpdateToView for MempoolDashboardState {
 
 #[derive(Clone, Default)]
 pub struct MempoolDashboardData {
-    total_pool_size_in_tx: u64,
-    total_pool_size_in_bytes: usize,
+    total_pool_size_in_bytes: u64,
     pending_tx: u64,
     proposed_tx: u64,
-    commiting_tx: u64,
+    committing_tx: u64,
     avg_fee_rate: Option<u64>,
     tx_in: usize,
     tx_out: usize,
@@ -295,9 +294,6 @@ impl DashboardData for MempoolDashboardData {
         client: &CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
         log::info!("Updating: MempoolDashboardData");
-        let tx_pool_info = client
-            .tx_pool_info()
-            .with_context(|| anyhow!("Unable to get tx pool info"))?;
         let fee_rate_statistics = client
             .get_fee_rate_statistics(None)
             .with_context(|| anyhow!("Unable to get fee rate statistics"))?;
@@ -310,11 +306,10 @@ impl DashboardData for MempoolDashboardData {
         let (average_block_time, _) =
             get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
         *self = Self {
-            total_pool_size_in_tx: tx_pool_info.total_tx_size.value(),
-            total_pool_size_in_bytes: 0,
+            total_pool_size_in_bytes: overview.pool.total_tx_size.value(),
             pending_tx: overview.pool.pending.value(),
             proposed_tx: overview.pool.proposed.value(),
-            commiting_tx: overview.pool.committing.value(),
+            committing_tx: overview.pool.committing.value(),
             avg_fee_rate: fee_rate_statistics.map(|x| x.mean.value()),
             tx_in: 0,
             tx_out: 0,
@@ -335,13 +330,13 @@ impl UpdateToView for MempoolDashboardData {
             TOTAL_POOL_SIZE,
             format!(
                 "{} txs ({:.1} MB)",
-                self.total_pool_size_in_tx,
+                self.pending_tx + self.committing_tx + self.proposed_tx,
                 self.total_pool_size_in_bytes as f64 / 1024.0 / 1024.0
             )
         );
         update_text!(siv, PENDING, format!("{}", self.pending_tx));
         update_text!(siv, PROPOSED, format!("{}", self.proposed_tx));
-        update_text!(siv, COMMITING, format!("{}", self.commiting_tx));
+        update_text!(siv, COMMITTING, format!("{}", self.committing_tx));
         update_text!(
             siv,
             AVG_FEE_RATE,
@@ -456,7 +451,7 @@ pub fn mempool_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxe
                             .child(
                                 LinearLayout::horizontal()
                                     .child(TextView::new("  🟢 Committing:").min_width(20))
-                                    .child(TextView::empty().with_name(COMMITING)),
+                                    .child(TextView::empty().with_name(COMMITTING)),
                             )
                             .child(
                                 LinearLayout::horizontal()

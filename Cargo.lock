@@ -336,7 +336,7 @@ checksum = "b8f4de41ddef453148c70bde26afc1cc26d2e22143e08555d7865e9cb0f523b1"
 [[package]]
 name = "ckb-constant"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "phf 0.12.1",
 ]
@@ -380,7 +380,7 @@ dependencies = [
 [[package]]
 name = "ckb-error"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "anyhow",
  "ckb-occupied-capacity 1.0.0",
@@ -401,7 +401,7 @@ dependencies = [
 [[package]]
 name = "ckb-fixed-hash"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "ckb-fixed-hash-core 1.0.0",
  "ckb-fixed-hash-macros 1.0.0",
@@ -422,7 +422,7 @@ dependencies = [
 [[package]]
 name = "ckb-fixed-hash-core"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "ckb_schemars",
  "faster-hex",
@@ -445,7 +445,7 @@ dependencies = [
 [[package]]
 name = "ckb-fixed-hash-macros"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "ckb-fixed-hash-core 1.0.0",
  "proc-macro2",
@@ -471,7 +471,7 @@ dependencies = [
 [[package]]
 name = "ckb-gen-types"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "cfg-if",
  "ckb-error 1.0.0",
@@ -497,7 +497,7 @@ dependencies = [
 [[package]]
 name = "ckb-hash"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "blake2b-ref",
  "blake2b-rs",
@@ -519,7 +519,7 @@ dependencies = [
 [[package]]
 name = "ckb-jsonrpc-types"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "ckb-types 1.0.0",
  "ckb_schemars",
@@ -572,7 +572,7 @@ dependencies = [
 [[package]]
 name = "ckb-occupied-capacity"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "ckb-occupied-capacity-core 1.0.0",
  "ckb-occupied-capacity-macros 1.0.0",
@@ -590,7 +590,7 @@ dependencies = [
 [[package]]
 name = "ckb-occupied-capacity-core"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "serde",
 ]
@@ -609,7 +609,7 @@ dependencies = [
 [[package]]
 name = "ckb-occupied-capacity-macros"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "ckb-occupied-capacity-core 1.0.0",
  "quote",
@@ -643,7 +643,7 @@ dependencies = [
 [[package]]
 name = "ckb-rational"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "numext-fixed-uint",
  "serde",
@@ -816,7 +816,7 @@ dependencies = [
 [[package]]
 name = "ckb-types"
 version = "1.0.0"
-source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#56055d5cea7cf8daf9fa475af389f9344bf9d28c"
+source = "git+https://github.com/nervosnetwork/ckb?branch=zhangsoledad%2Ftui#70752411f53c538ec3de259b07e345d438ab2b0e"
 dependencies = [
  "bit-vec",
  "bytes",
@@ -2575,9 +2575,9 @@ checksum = "6ff7e7fd62294a081720771513c1c1c995468a5d4e771a2928e423b88682ce48"
 
 [[package]]
 name = "quote"
-version = "1.0.41"
+version = "1.0.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce25767e7b499d1b604768e7cde645d14cc8584231ea6b295e9c9eb22c02e1d1"
+checksum = "a338cc41d27e6cc6dce6cefc13a0729dfbb81c262b1f519331575dd80ef3067f"
 dependencies = [
  "proc-macro2",
 ]
