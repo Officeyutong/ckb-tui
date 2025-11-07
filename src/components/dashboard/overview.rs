@@ -9,6 +9,7 @@ use cursive::{
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
     views::{LinearLayout, NamedView, Panel, ProgressBar, TextView},
 };
+use numext_fixed_uint::{U256, u256};
 
 use crate::{
     CURRENT_TAB,
@@ -85,7 +86,7 @@ pub struct OverviewDashboardState {
     pub disk_used: u64,
     pub disk_total: u64,
 
-    pub difficulty: f64,
+    pub difficulty: U256,
     pub hash_rate: f64,
 }
 
@@ -151,7 +152,7 @@ impl OverviewDashboardState {
             disk_used,
             ram_total,
             ram_used,
-            difficulty: 0.0,
+            difficulty: u256!("0"),
             hash_rate: 0.0,
         })
     }
@@ -177,12 +178,7 @@ impl DashboardState for OverviewDashboardState {
             .to_string()
             .parse::<f64>()
             .unwrap();
-        self.difficulty = overview_data
-            .mining
-            .difficulty
-            .to_string()
-            .parse::<f64>()
-            .unwrap();
+        self.difficulty = overview_data.mining.difficulty.clone();
         let now = chrono::Local::now();
         let diff_secs = ((now - self.last_update).num_milliseconds() as f64) / 1e3;
         {
@@ -292,7 +288,7 @@ impl UpdateToView for OverviewDashboardState {
         update_text!(
             siv,
             names::DIFFICULTY,
-            format!("{:.2} EH", self.difficulty / 1000_000_000_000_000.0)
+            format!("{:x}", self.difficulty)
         );
         update_text!(
             siv,

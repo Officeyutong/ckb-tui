@@ -9,6 +9,7 @@ use cursive::{
     views::{Button, Dialog, LinearLayout, NamedView, Panel, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
+use numext_fixed_uint::U256;
 use queue::Queue;
 
 use crate::{
@@ -210,7 +211,7 @@ pub struct BlockchainDashboardData {
     average_block_time: f64,
     block_height: u64,
     algorithm: String,
-    difficulty: f64,
+    difficulty: U256,
     hash_rate: f64,
 
     scripts: Vec<ScriptItem>,
@@ -282,12 +283,7 @@ impl DashboardData for BlockchainDashboardData {
             average_block_time,
             block_height: tip_header.inner.number.value(),
             algorithm: "Eaglesong".to_string(),
-            difficulty: overview_data
-                .mining
-                .difficulty
-                .to_string()
-                .parse::<f64>()
-                .unwrap(),
+            difficulty: overview_data.mining.difficulty,
             hash_rate: overview_data
                 .mining
                 .hash_rate
@@ -323,7 +319,7 @@ impl UpdateToView for BlockchainDashboardData {
             format!("{:.2} s", self.average_block_time)
         );
         update_text!(siv, ALGORITHM, format!("{}", self.algorithm));
-        update_text!(siv, DIFFICULTY, format!("{:.2} EH", self.difficulty / 1e15));
+        update_text!(siv, DIFFICULTY, format!("{:x}", self.difficulty));
         update_text!(siv, HASH_RATE, format!("{:.2} MH/s", self.hash_rate / 1e6));
         siv.call_on_name(
             SCRIPT_TABLE,
