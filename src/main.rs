@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use clap::Parser;
 use cursive::{
@@ -60,7 +61,10 @@ fn main() -> anyhow::Result<()> {
     siv.add_global_callback('q', |s| s.quit());
     siv.add_global_callback('~', cursive::Cursive::toggle_debug_console);
     let loading_variable = Arc::new(AtomicBool::new(false));
-
+    let enable_fetch_overview = match client.post::<(), Overview>("get_overview", ()) {
+        Ok(_) => true,
+        Err(_) => false,
+    };
     let sync_request_tx = {
         let (tx, rx) = std::sync::mpsc::channel::<SyncRequest>();
         let cb_sink = siv.cb_sink().clone();
@@ -69,6 +73,7 @@ fn main() -> anyhow::Result<()> {
         std::thread::spawn(move || {
             {
                 let mut general_data = GeneralDashboardData::default();
+                general_data.set_enable_overview_data(enable_fetch_overview);
                 let result = general_data.fetch_data_through_client(&client);
                 cb_sink
                     .send(Box::new(move |siv| {
@@ -87,6 +92,9 @@ fn main() -> anyhow::Result<()> {
                 Box::new(MempoolDashboardData::default()),
                 Box::new(PeersDashboardData::default()),
             ];
+            for item in data.iter_mut() {
+                item.set_enable_overview_data(enable_fetch_overview);
+            }
             loop {
                 match rx.recv().unwrap() {
                     SyncRequest::Stop => break,
@@ -165,8 +173,10 @@ fn main() -> anyhow::Result<()> {
         let tx = sync_request_tx.clone();
         let cb_sink = siv.cb_sink().clone();
         std::thread::spawn(move || {
-            let mut overview_state = OverviewDashboardState::new(client.clone()).unwrap();
-            let mut blockchain_state = BlockchainDashboardState::new(client.clone());
+            let mut overview_state =
+                OverviewDashboardState::new(client.clone(), enable_fetch_overview).unwrap();
+            let mut blockchain_state =
+                BlockchainDashboardState::new(client.clone(), enable_fetch_overview);
             let mut mempool_state = MempoolDashboardState::new(args.tcp_url.clone());
             let mut logs_state = LogsDashboardState::new();
 

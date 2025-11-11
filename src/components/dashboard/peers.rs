@@ -191,6 +191,10 @@ impl DashboardData for PeersDashboardData {
         log::info!("Updated: PeersDashboardData");
         Ok(Box::new(self.clone()))
     }
+    
+    fn set_enable_overview_data(&mut self, _flag: bool) {
+        
+    }
 }
 
 pub fn peers_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {

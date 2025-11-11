@@ -36,14 +36,19 @@ declare_names!(names, "dashboard_", TITLE, REFRESHING_LABEL, MAIN_LAYOUT);
 #[derive(Clone, Default)]
 pub struct GeneralDashboardData {
     pub network_name: String,
-    pub version: String,
+    pub version: Option<String>,
+    enable_fetch_overview_data: bool,
 }
 impl UpdateToView for GeneralDashboardData {
     fn update_to_view(&self, siv: &mut cursive::Cursive) {
         siv.call_on_name(names::TITLE, |view: &mut TextView| {
             view.set_content(format!(
                 "{} CKB Node Monitor {}",
-                self.network_name, self.version
+                self.network_name,
+                match &self.version {
+                    Some(v) => v,
+                    None => "<unknown version>",
+                }
             ));
         });
     }
@@ -58,19 +63,29 @@ impl DashboardData for GeneralDashboardData {
         let block_chain_info = client
             .get_blockchain_info()
             .with_context(|| anyhow!("Unable to get block chain info"))?;
-        let overview_info: Overview = client
-            .post("get_overview", ())
-            .with_context(|| anyhow!("Unable to get overview info"))?;
+        let version = if self.enable_fetch_overview_data {
+            let overview_info: Overview = client
+                .post("get_overview", ())
+                .with_context(|| anyhow!("Unable to get overview info"))?;
+            Some(overview_info.version)
+        } else {
+            None
+        };
         *self = Self {
             network_name: match block_chain_info.chain.as_str() {
                 "ckb" => "[Meepo Mainnet]".to_string(),
                 "ckb_testnet" => "[Mirana Testnet]".to_string(),
                 s => format!("[{}]", s),
             },
-            version: overview_info.version,
+            version,
+            enable_fetch_overview_data: self.enable_fetch_overview_data,
         };
         log::info!("Updated: GeneralDashboardData");
         Ok(Box::new(self.clone()))
+    }
+
+    fn set_enable_overview_data(&mut self, flag: bool) {
+        self.enable_fetch_overview_data = flag;
     }
 }
 
@@ -131,5 +146,5 @@ pub fn set_loading(siv: &mut Cursive, loading: bool) {
 }
 pub enum TUIEvent {
     FilterLogEvent(FilterLogOption),
-    OpenConsensusModal(cursive::CbSink)
+    OpenConsensusModal(cursive::CbSink),
 }

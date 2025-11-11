@@ -56,10 +56,11 @@ declare_names!(
     AVERAGE_FEE_RATE,
     NETWORK
 );
+
 #[derive(Clone)]
-pub struct OverviewDashboardState {
+
+struct GetOverviewOfOverviewDashboardState {
     pub cpu_history: queue::Queue<f64>,
-    pub last_update: chrono::DateTime<Local>,
     pub total_disk_write_bytes: u64,
     pub total_disk_read_bytes: u64,
     // Bytes per sec
@@ -73,13 +74,6 @@ pub struct OverviewDashboardState {
     pub network_send_speed: f64,
     // Bytes per sec
     pub network_receive_speed: f64,
-
-    pub client: CkbRpcClient,
-    pub current_block: u64,
-    pub total_block: u64,
-    // In seconds
-    pub estimated_time_left: u64,
-
     pub cpu_percent: f64,
     pub ram_total: u64,
     pub ram_used: u64,
@@ -88,6 +82,19 @@ pub struct OverviewDashboardState {
 
     pub difficulty: U256,
     pub hash_rate: f64,
+}
+
+#[derive(Clone)]
+pub struct OverviewDashboardState {
+    pub last_update: chrono::DateTime<Local>,
+
+    pub client: CkbRpcClient,
+    pub current_block: u64,
+    pub total_block: u64,
+    // In seconds
+    pub estimated_time_left: u64,
+
+    overview_data: Option<GetOverviewOfOverviewDashboardState>,
 }
 
 impl OverviewDashboardState {
@@ -125,78 +132,88 @@ impl OverviewDashboardState {
         (cpu_percent, disk_total, disk_used, ram_total, ram_used)
     }
 
-    pub fn new(client: CkbRpcClient) -> anyhow::Result<Self> {
-        let overview = client.post::<(), Overview>("get_overview", ())?;
+    pub fn new(client: CkbRpcClient, enable_overview_data: bool) -> anyhow::Result<Self> {
+        let overview_data = if enable_overview_data {
+            let overview = client.post::<(), Overview>("get_overview", ())?;
 
-        let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk(&overview);
-        let (send, receive) = Self::get_total_send_and_receive_bytes_for_network_devices(&overview);
+            let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk(&overview);
+            let (send, receive) =
+                Self::get_total_send_and_receive_bytes_for_network_devices(&overview);
 
-        let  (cpu_percent, disk_total, disk_used, ram_total, ram_used) = Self::extract_cpu_percent_and_disk_total_and_disk_used_and_ram_total_and_ram_used_from_overview(&overview);
+            let  (cpu_percent, disk_total, disk_used, ram_total, ram_used) = Self::extract_cpu_percent_and_disk_total_and_disk_used_and_ram_total_and_ram_used_from_overview(&overview);
+            Some(GetOverviewOfOverviewDashboardState {
+                cpu_history: Default::default(),
+                disk_read_speed: 1.0,
+                disk_write_speed: 1.0,
+                total_disk_read_bytes: read,
+                total_disk_write_bytes: write,
+                network_receive_speed: 1.0,
+                network_send_speed: 1.0,
+                total_network_receive_bytes: receive,
+                total_network_send_bytes: send,
+                cpu_percent,
+                disk_total,
+                disk_used,
+                ram_total,
+                ram_used,
+                difficulty: u256!("0"),
+                hash_rate: 0.0,
+            })
+        } else {
+            None
+        };
         Ok(Self {
-            cpu_history: Default::default(),
             last_update: chrono::Local::now(),
-            disk_read_speed: 1.0,
-            disk_write_speed: 1.0,
-            total_disk_read_bytes: read,
-            total_disk_write_bytes: write,
-            network_receive_speed: 1.0,
-            network_send_speed: 1.0,
-            total_network_receive_bytes: receive,
-            total_network_send_bytes: send,
+            overview_data,
             client,
             current_block: 0,
             estimated_time_left: 100,
             total_block: 1,
-            cpu_percent,
-            disk_total,
-            disk_used,
-            ram_total,
-            ram_used,
-            difficulty: u256!("0"),
-            hash_rate: 0.0,
         })
-    }
-    fn get_overview_data(&self) -> anyhow::Result<Overview> {
-        Ok(self.client.post::<(), Overview>("get_overview", ())?)
     }
 }
 
 impl DashboardState for OverviewDashboardState {
     fn update_state(&mut self) -> anyhow::Result<()> {
         log::info!("Updating: OverviewDashboardState");
-        let overview_data = self.get_overview_data()?;
-
-        self.cpu_history
-            .queue(overview_data.sys.global.global_cpu_usage as f64 / 100.0)
-            .unwrap();
-        if self.cpu_history.len() > 20 {
-            self.cpu_history.dequeue();
-        }
-        self.hash_rate = overview_data
-            .mining
-            .hash_rate
-            .to_string()
-            .parse::<f64>()
-            .unwrap();
-        self.difficulty = overview_data.mining.difficulty.clone();
         let now = chrono::Local::now();
         let diff_secs = ((now - self.last_update).num_milliseconds() as f64) / 1e3;
-        {
-            let (read, write) = Self::get_total_read_and_total_write_bytes_for_disk(&overview_data);
-            self.disk_read_speed = (read - self.total_disk_read_bytes) as f64 / diff_secs;
-            self.disk_write_speed = (write - self.total_disk_write_bytes) as f64 / diff_secs;
-            self.total_disk_read_bytes = read;
-            self.total_disk_write_bytes = write;
+        if let Some(data) = &mut self.overview_data {
+            let overview_data = self.client.post::<(), Overview>("get_overview", ())?;
+
+            data.cpu_history
+                .queue(overview_data.sys.global.global_cpu_usage as f64 / 100.0)
+                .unwrap();
+            if data.cpu_history.len() > 20 {
+                data.cpu_history.dequeue();
+            }
+            data.hash_rate = overview_data
+                .mining
+                .hash_rate
+                .to_string()
+                .parse::<f64>()
+                .unwrap();
+            data.difficulty = overview_data.mining.difficulty.clone();
+
+            {
+                let (read, write) =
+                    Self::get_total_read_and_total_write_bytes_for_disk(&overview_data);
+                data.disk_read_speed = (read - data.total_disk_read_bytes) as f64 / diff_secs;
+                data.disk_write_speed = (write - data.total_disk_write_bytes) as f64 / diff_secs;
+                data.total_disk_read_bytes = read;
+                data.total_disk_write_bytes = write;
+            }
+            {
+                let (send, receive) =
+                    Self::get_total_send_and_receive_bytes_for_network_devices(&overview_data);
+                data.network_receive_speed =
+                    (receive - data.total_network_receive_bytes) as f64 / diff_secs;
+                data.network_send_speed = (send - data.total_network_send_bytes) as f64 / diff_secs;
+                data.total_network_receive_bytes = receive;
+                data.total_network_send_bytes = send;
+            }
         }
-        {
-            let (send, receive) =
-                Self::get_total_send_and_receive_bytes_for_network_devices(&overview_data);
-            self.network_receive_speed =
-                (receive - self.total_network_receive_bytes) as f64 / diff_secs;
-            self.network_send_speed = (send - self.total_network_send_bytes) as f64 / diff_secs;
-            self.total_network_receive_bytes = receive;
-            self.total_network_send_bytes = send;
-        }
+
         let tip_header = self
             .client
             .get_tip_header()
@@ -228,27 +245,67 @@ impl DashboardState for OverviewDashboardState {
 
 impl UpdateToView for OverviewDashboardState {
     fn update_to_view(&self, siv: &mut Cursive) {
-        siv.call_on_name(CPU_HISTORY, |view: &mut SimpleBarChart| {
-            view.set_data(self.cpu_history.vec()).unwrap();
-        });
-        update_text!(
-            siv,
-            DISK_SPEED,
-            format!(
-                "{:.1} MB/s (Read)   {:.1} MB/s (Write)",
-                self.disk_read_speed / 1024.0 / 1024.0,
-                self.disk_write_speed / 1024.0 / 1024.0
-            )
-        );
-        update_text!(
-            siv,
-            NETWORK,
-            format!(
-                "{:.1} MB/s (In)   {:.1} MB/s (Out)",
-                self.network_receive_speed / 1024.0 / 1024.0,
-                self.network_send_speed / 1024.0 / 1024.0
-            )
-        );
+        if let Some(data) = &self.overview_data {
+            siv.call_on_name(CPU_HISTORY, |view: &mut SimpleBarChart| {
+                view.set_data(data.cpu_history.vec()).unwrap();
+            });
+            update_text!(
+                siv,
+                DISK_SPEED,
+                format!(
+                    "{:.1} MB/s (Read)   {:.1} MB/s (Write)",
+                    data.disk_read_speed / 1024.0 / 1024.0,
+                    data.disk_write_speed / 1024.0 / 1024.0
+                )
+            );
+            update_text!(
+                siv,
+                NETWORK,
+                format!(
+                    "{:.1} MB/s (In)   {:.1} MB/s (Out)",
+                    data.network_receive_speed / 1024.0 / 1024.0,
+                    data.network_send_speed / 1024.0 / 1024.0
+                )
+            );
+
+            update_text!(siv, names::CPU, format!("{:.1}%", data.cpu_percent));
+            update_text!(
+                siv,
+                names::RAM,
+                format!(
+                    "{:.1}GB / {:.1}GB",
+                    data.ram_used as f64 / 1024.0 / 1024.0 / 1024.0,
+                    data.ram_total as f64 / 1024.0 / 1024.0 / 1024.0
+                )
+            );
+            update_text!(
+                siv,
+                names::DISK_USAGE,
+                format!(
+                    "{:.0}GB / {:.0}GB ({:.2}%)",
+                    data.disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
+                    data.disk_total as f64 / 1024.0 / 1024.0 / 1024.0,
+                    (data.disk_used as f64 / data.disk_total as f64 * 100.0)
+                )
+            );
+            update_text!(siv, names::DIFFICULTY, format!("{:x}", data.difficulty));
+            update_text!(
+                siv,
+                names::HASH_RATE,
+                format!("{:.2} MH/s", data.hash_rate / 1000000.0)
+            );
+        } else {
+            siv.call_on_name(CPU_HISTORY, |view: &mut SimpleBarChart| {
+                view.set_data(&vec![]).unwrap();
+            });
+            update_text!(siv, DISK_SPEED, "N/A");
+            update_text!(siv, NETWORK, "N/A");
+            update_text!(siv, names::CPU, "N/A");
+            update_text!(siv, names::RAM, "N/A");
+            update_text!(siv, names::DISK_USAGE, "N/A");
+            update_text!(siv, names::DIFFICULTY, "N/A");
+            update_text!(siv, names::HASH_RATE, "N/A");
+        };
         siv.call_on_name(names::SYNCING_PROGRESS, |view: &mut ProgressBar| {
             view.set_value(
                 (((self.current_block as f64 / self.total_block as f64) * 100.0) as usize).min(100),
@@ -265,33 +322,17 @@ impl UpdateToView for OverviewDashboardState {
             names::ESTIMATED_TIME_LEFT,
             format!("{}min", self.estimated_time_left.div_ceil(60))
         );
-        update_text!(siv, names::CPU, format!("{:.1}%", self.cpu_percent));
-        update_text!(
-            siv,
-            names::RAM,
-            format!(
-                "{:.1}GB / {:.1}GB",
-                self.ram_used as f64 / 1024.0 / 1024.0 / 1024.0,
-                self.ram_total as f64 / 1024.0 / 1024.0 / 1024.0
-            )
-        );
-        update_text!(
-            siv,
-            names::DISK_USAGE,
-            format!(
-                "{:.0}GB / {:.0}GB ({:.2}%)",
-                self.disk_used as f64 / 1024.0 / 1024.0 / 1024.0,
-                self.disk_total as f64 / 1024.0 / 1024.0 / 1024.0,
-                (self.disk_used as f64 / self.disk_total as f64 * 100.0)
-            )
-        );
-        update_text!(siv, names::DIFFICULTY, format!("{:x}", self.difficulty));
-        update_text!(
-            siv,
-            names::HASH_RATE,
-            format!("{:.2} MH/s", self.hash_rate / 1000000.0)
-        );
     }
+}
+
+#[derive(Debug, Clone)]
+struct GetOverviewOfOverviewDashboardData {
+    pub tx_pending: u64,
+    pub tx_proposed: u64,
+    pub tx_committing: u64,
+    pub tx_rejected: u64,
+    // in bytes
+    pub total_pool_size_in_bytes: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -299,13 +340,7 @@ pub struct OverviewDashboardData {
     pub inbound_peers: usize,
     pub outbound_peers: usize,
     pub average_latency: isize,
-
-    pub tx_pending: u64,
-    pub tx_proposed: u64,
-    pub tx_committing: u64,
-    pub tx_rejected: u64,
-    // in bytes
-    pub total_pool_size_in_bytes: u64,
+    overview_data: Option<GetOverviewOfOverviewDashboardData>,
     // shannons per KB
     pub average_fee_rate: Option<u64>,
 
@@ -315,6 +350,8 @@ pub struct OverviewDashboardData {
 
     pub estimated_epoch_time: f64,
     pub average_block_time: f64,
+
+    enable_fetch_overview_data: bool,
 }
 
 impl UpdateToView for OverviewDashboardData {
@@ -335,19 +372,27 @@ impl UpdateToView for OverviewDashboardData {
             format!("{}ms", self.average_latency)
         );
 
-        update_text!(
-            siv,
-            names::TOTAL_POOL_SIZE,
-            format!(
-                "{} txs ({:.1} MB)",
-                self.tx_committing + self.tx_pending + self.tx_proposed,
-                self.total_pool_size_in_bytes as f64 / 1024.0 / 1024.0
-            )
-        );
-        update_text!(siv, names::PENDING_TX, format!("{}", self.tx_pending));
-        update_text!(siv, names::PROPOSED_TX, format!("{}", self.tx_proposed));
-        update_text!(siv, names::COMMITTING_TX, format!("{}", self.tx_committing));
-        update_text!(siv, names::REJECTED_TX, format!("{}", self.tx_rejected));
+        if let Some(data) = &self.overview_data {
+            update_text!(
+                siv,
+                names::TOTAL_POOL_SIZE,
+                format!(
+                    "{} txs ({:.1} MB)",
+                    data.tx_committing + data.tx_pending + data.tx_proposed,
+                    data.total_pool_size_in_bytes as f64 / 1024.0 / 1024.0
+                )
+            );
+            update_text!(siv, names::PENDING_TX, format!("{}", data.tx_pending));
+            update_text!(siv, names::PROPOSED_TX, format!("{}", data.tx_proposed));
+            update_text!(siv, names::COMMITTING_TX, format!("{}", data.tx_committing));
+            update_text!(siv, names::REJECTED_TX, format!("{}", data.tx_rejected));
+        } else {
+            update_text!(siv, names::TOTAL_POOL_SIZE, format!("N/A"));
+            update_text!(siv, names::PENDING_TX, format!("N/A"));
+            update_text!(siv, names::PROPOSED_TX, format!("N/A"));
+            update_text!(siv, names::COMMITTING_TX, format!("N/A"));
+            update_text!(siv, names::REJECTED_TX, format!("N/A"));
+        };
 
         update_text!(
             siv,
@@ -407,27 +452,39 @@ impl DashboardData for OverviewDashboardData {
 
         let (average_block_time, estimated_epoch_time) =
             get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
-        let overview_data: Overview = client
-            .post("get_overview", ())
-            .with_context(|| anyhow!("Unable to get overview info"))?;
+        let overview_data = if self.enable_fetch_overview_data {
+            let overview_data: Overview = client
+                .post("get_overview", ())
+                .with_context(|| anyhow!("Unable to get overview info"))?;
+            Some(GetOverviewOfOverviewDashboardData {
+                tx_pending: overview_data.pool.pending.value(),
+                tx_proposed: overview_data.pool.proposed.value(),
+                tx_committing: overview_data.pool.committing.value(),
+                tx_rejected: overview_data.pool.total_recent_reject_num.value(),
+                total_pool_size_in_bytes: overview_data.pool.total_tx_size.value(),
+            })
+        } else {
+            None
+        };
         *self = OverviewDashboardData {
             average_latency: -1,
             inbound_peers,
             outbound_peers,
-            tx_pending: overview_data.pool.pending.value(),
-            tx_proposed: overview_data.pool.proposed.value(),
-            tx_committing: overview_data.pool.committing.value(),
-            tx_rejected: overview_data.pool.total_recent_reject_num.value(),
             average_fee_rate: fee_rate_statistics.map(|x| x.mean.value()),
             epoch,
             epoch_block,
             epoch_block_count,
             average_block_time,
             estimated_epoch_time,
-            total_pool_size_in_bytes: overview_data.pool.total_tx_size.value(),
+            enable_fetch_overview_data: self.enable_fetch_overview_data,
+            overview_data,
         };
         log::info!("Updated: OverviewDashboardData");
         Ok(Box::new(self.clone()))
+    }
+
+    fn set_enable_overview_data(&mut self, flag: bool) {
+        self.enable_fetch_overview_data = flag;
     }
 }
 

@@ -49,8 +49,8 @@ declare_names!(
     SCRIPT_TABLE
 );
 
-#[derive(Clone)]
-pub struct BlockchainDashboardState {
+#[derive(Clone, Default)]
+pub struct GetOverviewOfBlockchainDasboardState {
     live_cells_history: Queue<f64>,
     max_live_cells: u64,
     min_live_cells: u64,
@@ -59,28 +59,44 @@ pub struct BlockchainDashboardState {
     max_occupied_capacity: u64,
     min_occupied_capacity: u64,
     occupied_capacity: u64,
+}
+
+#[derive(Clone)]
+pub struct BlockchainDashboardState {
     client: CkbRpcClient,
     consensus: Option<Consensus>,
+    overview_data: Option<GetOverviewOfBlockchainDasboardState>,
 }
 
 impl UpdateToView for BlockchainDashboardState {
     fn update_to_view(&self, siv: &mut cursive::Cursive) {
-        update_text!(siv, LIVE_CELLS, format!("{}", self.live_cells));
-        siv.call_on_name(LIVE_CELLS_HISTORY, |view: &mut SimpleBarChart| {
-            view.set_max_value(self.max_live_cells as f64);
-            view.set_diff_value(Some(self.min_live_cells as f64 * 0.9));
-            view.set_data(self.live_cells_history.vec()).unwrap();
-        });
-        update_text!(
-            siv,
-            OCCUPIED_CAPACITY,
-            format!("{} CKB ", self.occupied_capacity)
-        );
-        siv.call_on_name(OCCUPIED_CAPACITY_HISTORY, |view: &mut SimpleBarChart| {
-            view.set_max_value(self.max_occupied_capacity as f64);
-            view.set_diff_value(Some(self.min_occupied_capacity as f64 * 0.9));
-            view.set_data(self.occupied_capacity_history.vec()).unwrap();
-        });
+        if let Some(data) = &self.overview_data {
+            update_text!(siv, LIVE_CELLS, format!("{}", data.live_cells));
+            siv.call_on_name(LIVE_CELLS_HISTORY, |view: &mut SimpleBarChart| {
+                view.set_max_value(data.max_live_cells as f64);
+                view.set_diff_value(Some(data.min_live_cells as f64 * 0.9));
+                view.set_data(data.live_cells_history.vec()).unwrap();
+            });
+            update_text!(
+                siv,
+                OCCUPIED_CAPACITY,
+                format!("{} CKB ", data.occupied_capacity)
+            );
+            siv.call_on_name(OCCUPIED_CAPACITY_HISTORY, |view: &mut SimpleBarChart| {
+                view.set_max_value(data.max_occupied_capacity as f64);
+                view.set_diff_value(Some(data.min_occupied_capacity as f64 * 0.9));
+                view.set_data(data.occupied_capacity_history.vec()).unwrap();
+            });
+        } else {
+            update_text!(siv, LIVE_CELLS, format!("N/A"));
+            siv.call_on_name(LIVE_CELLS_HISTORY, |view: &mut SimpleBarChart| {
+                view.set_data(&vec![]).unwrap();
+            });
+            update_text!(siv, OCCUPIED_CAPACITY, format!("N/A"));
+            siv.call_on_name(OCCUPIED_CAPACITY_HISTORY, |view: &mut SimpleBarChart| {
+                view.set_data(&vec![]).unwrap();
+            });
+        }
     }
 }
 
@@ -100,29 +116,30 @@ impl DashboardState for BlockchainDashboardState {
         }
     }
     fn update_state(&mut self) -> anyhow::Result<()> {
-        let overview: Overview = self
-            .client
-            .post("get_overview", ())
-            .with_context(|| anyhow!("Unable to get overview info"))?;
-        let occupied_capacity = overview.cells.total_occupied_capacities.value();
+        if let Some(data) = &mut self.overview_data {
+            let overview = self
+                .client
+                .post::<(), Overview>("get_overview", ())
+                .with_context(|| anyhow!("Unable to get overview data"))?;
+            let occupied_capacity = overview.cells.total_occupied_capacities.value();
+            data.max_occupied_capacity = data.max_occupied_capacity.max(occupied_capacity);
+            data.min_occupied_capacity = data.min_occupied_capacity.min(occupied_capacity);
+            data.occupied_capacity = occupied_capacity;
+            data.occupied_capacity_history
+                .queue(occupied_capacity as f64)
+                .unwrap();
+            if data.occupied_capacity_history.len() > 20 {
+                data.occupied_capacity_history.dequeue();
+            }
 
-        self.max_occupied_capacity = self.max_occupied_capacity.max(occupied_capacity);
-        self.min_occupied_capacity = self.min_occupied_capacity.min(occupied_capacity);
-        self.occupied_capacity = occupied_capacity;
-        self.occupied_capacity_history
-            .queue(occupied_capacity as f64)
-            .unwrap();
-        if self.occupied_capacity_history.len() > 20 {
-            self.occupied_capacity_history.dequeue();
-        }
-
-        let live_cells = overview.cells.estimate_live_cells_num.value();
-        self.max_live_cells = self.max_live_cells.max(live_cells);
-        self.min_live_cells = self.min_live_cells.min(live_cells);
-        self.live_cells = live_cells;
-        self.live_cells_history.queue(live_cells as f64).unwrap();
-        if self.live_cells_history.len() > 20 {
-            self.live_cells_history.dequeue();
+            let live_cells = overview.cells.estimate_live_cells_num.value();
+            data.max_live_cells = data.max_live_cells.max(live_cells);
+            data.min_live_cells = data.min_live_cells.min(live_cells);
+            data.live_cells = live_cells;
+            data.live_cells_history.queue(live_cells as f64).unwrap();
+            if data.live_cells_history.len() > 20 {
+                data.live_cells_history.dequeue();
+            }
         }
 
         self.consensus = Some(
@@ -136,18 +153,15 @@ impl DashboardState for BlockchainDashboardState {
 }
 
 impl BlockchainDashboardState {
-    pub fn new(client: CkbRpcClient) -> Self {
+    pub fn new(client: CkbRpcClient, fetch_overview_data: bool) -> Self {
         Self {
             client,
-            live_cells: 1,
-            live_cells_history: Queue::default(),
-            max_live_cells: 1,
-            min_live_cells: u64::MAX,
-            max_occupied_capacity: 1,
-            min_occupied_capacity: u64::MAX,
-            occupied_capacity: 1,
-            occupied_capacity_history: Default::default(),
             consensus: None,
+            overview_data: if fetch_overview_data {
+                Some(Default::default())
+            } else {
+                None
+            },
         }
     }
 }
@@ -201,6 +215,13 @@ impl TableViewItem<ScriptColumn> for ScriptItem {
         }
     }
 }
+
+#[derive(Clone)]
+pub struct GetOverviewOfBlockchainDashboardData {
+    difficulty: U256,
+    hash_rate: f64,
+}
+
 #[derive(Clone, Default)]
 pub struct BlockchainDashboardData {
     epoch: u64,
@@ -211,19 +232,18 @@ pub struct BlockchainDashboardData {
     average_block_time: f64,
     block_height: u64,
     algorithm: String,
-    difficulty: U256,
-    hash_rate: f64,
+
+    overview_data: Option<GetOverviewOfBlockchainDashboardData>,
 
     scripts: Vec<ScriptItem>,
-}
 
-impl BlockchainDashboardData {
-    fn get_overview_data(&self, client: &CkbRpcClient) -> anyhow::Result<Overview> {
-        Ok(client.post::<(), Overview>("get_overview", ())?)
-    }
+    enable_overview_data: bool,
 }
 
 impl DashboardData for BlockchainDashboardData {
+    fn set_enable_overview_data(&mut self, flag: bool) {
+        self.enable_overview_data = flag;
+    }
     fn should_update(&self) -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
@@ -238,7 +258,15 @@ impl DashboardData for BlockchainDashboardData {
         let (epoch, epoch_block, epoch_block_count) = extract_epoch(tip_header.inner.epoch.value());
         let (average_block_time, estimated_epoch_time) =
             get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
-        let overview_data = self.get_overview_data(client)?;
+        let overview_data = if self.enable_overview_data {
+            let data = client.post::<(), Overview>("get_overview", ())?;
+            Some(GetOverviewOfBlockchainDashboardData {
+                difficulty: data.mining.difficulty,
+                hash_rate: data.mining.hash_rate.to_string().parse::<f64>().unwrap(),
+            })
+        } else {
+            None
+        };
         let consensus = client
             .get_consensus()
             .with_context(|| anyhow!("Unable to get consensus"))?;
@@ -283,13 +311,8 @@ impl DashboardData for BlockchainDashboardData {
             average_block_time,
             block_height: tip_header.inner.number.value(),
             algorithm: "Eaglesong".to_string(),
-            difficulty: overview_data.mining.difficulty,
-            hash_rate: overview_data
-                .mining
-                .hash_rate
-                .to_string()
-                .parse::<f64>()
-                .unwrap(),
+            enable_overview_data: self.enable_overview_data,
+            overview_data,
             scripts,
         };
         log::info!("Updated: MempoolDashboardData");
@@ -319,8 +342,13 @@ impl UpdateToView for BlockchainDashboardData {
             format!("{:.2} s", self.average_block_time)
         );
         update_text!(siv, ALGORITHM, format!("{}", self.algorithm));
-        update_text!(siv, DIFFICULTY, format!("{:x}", self.difficulty));
-        update_text!(siv, HASH_RATE, format!("{:.2} MH/s", self.hash_rate / 1e6));
+        if let Some(data) = &self.overview_data {
+            update_text!(siv, DIFFICULTY, format!("{:x}", data.difficulty));
+            update_text!(siv, HASH_RATE, format!("{:.2} MH/s", data.hash_rate / 1e6));
+        } else {
+            update_text!(siv, DIFFICULTY, format!("N/A"));
+            update_text!(siv, HASH_RATE, format!("N/A"));
+        }
         siv.call_on_name(
             SCRIPT_TABLE,
             |view: &mut TableView<ScriptItem, ScriptColumn>| {

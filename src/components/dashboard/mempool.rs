@@ -276,16 +276,22 @@ impl UpdateToView for MempoolDashboardState {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct MempoolDashboardData {
+#[derive(Clone)]
+pub struct GetOverviewOfMempoolDashboardData {
     total_pool_size_in_bytes: u64,
     pending_tx: u64,
     proposed_tx: u64,
     committing_tx: u64,
+}
+
+#[derive(Clone, Default)]
+pub struct MempoolDashboardData {
     avg_fee_rate: Option<u64>,
     tx_in: usize,
     tx_out: usize,
     average_block_time: f64,
+    overview_data: Option<GetOverviewOfMempoolDashboardData>,
+    enable_fetch_overview: bool,
 }
 
 impl DashboardData for MempoolDashboardData {
@@ -300,20 +306,28 @@ impl DashboardData for MempoolDashboardData {
         let tip_header = client
             .get_tip_header()
             .with_context(|| anyhow!("Unable to get tip header"))?;
-        let overview: Overview = client
-            .post("get_overview", ())
-            .with_context(|| anyhow!("Unable to get overview info"))?;
+        let overview_data = if self.enable_fetch_overview {
+            let overview: Overview = client
+                .post("get_overview", ())
+                .with_context(|| anyhow!("Unable to get overview info"))?;
+            Some(GetOverviewOfMempoolDashboardData {
+                total_pool_size_in_bytes: overview.pool.total_tx_size.value(),
+                pending_tx: overview.pool.pending.value(),
+                proposed_tx: overview.pool.proposed.value(),
+                committing_tx: overview.pool.committing.value(),
+            })
+        } else {
+            None
+        };
         let (average_block_time, _) =
             get_average_block_time_and_estimated_epoch_time(&tip_header, client)?;
         *self = Self {
-            total_pool_size_in_bytes: overview.pool.total_tx_size.value(),
-            pending_tx: overview.pool.pending.value(),
-            proposed_tx: overview.pool.proposed.value(),
-            committing_tx: overview.pool.committing.value(),
+            overview_data,
             avg_fee_rate: fee_rate_statistics.map(|x| x.mean.value()),
             tx_in: 0,
             tx_out: 0,
             average_block_time,
+            enable_fetch_overview: self.enable_fetch_overview,
         };
         log::info!("Updated: PeersDashboardData");
         Ok(Box::new(self.clone()))
@@ -321,22 +335,33 @@ impl DashboardData for MempoolDashboardData {
     fn should_update(&self) -> bool {
         CURRENT_TAB.load(std::sync::atomic::Ordering::SeqCst) == 2
     }
+
+    fn set_enable_overview_data(&mut self, flag: bool) {
+        self.enable_fetch_overview = flag;
+    }
 }
 
 impl UpdateToView for MempoolDashboardData {
     fn update_to_view(&self, siv: &mut cursive::Cursive) {
-        update_text!(
-            siv,
-            TOTAL_POOL_SIZE,
-            format!(
-                "{} txs ({:.1} MB)",
-                self.pending_tx + self.committing_tx + self.proposed_tx,
-                self.total_pool_size_in_bytes as f64 / 1024.0 / 1024.0
-            )
-        );
-        update_text!(siv, PENDING, format!("{}", self.pending_tx));
-        update_text!(siv, PROPOSED, format!("{}", self.proposed_tx));
-        update_text!(siv, COMMITTING, format!("{}", self.committing_tx));
+        if let Some(data) = &self.overview_data {
+            update_text!(
+                siv,
+                TOTAL_POOL_SIZE,
+                format!(
+                    "{} txs ({:.1} MB)",
+                    data.pending_tx + data.committing_tx + data.proposed_tx,
+                    data.total_pool_size_in_bytes as f64 / 1024.0 / 1024.0
+                )
+            );
+            update_text!(siv, PENDING, format!("{}", data.pending_tx));
+            update_text!(siv, PROPOSED, format!("{}", data.proposed_tx));
+            update_text!(siv, COMMITTING, format!("{}", data.committing_tx));
+        } else {
+            update_text!(siv, TOTAL_POOL_SIZE, format!("N/A",));
+            update_text!(siv, PENDING, format!("N/A"));
+            update_text!(siv, PROPOSED, format!("N/A"));
+            update_text!(siv, COMMITTING, format!("N/A"));
+        };
         update_text!(
             siv,
             AVG_FEE_RATE,

@@ -21,6 +21,7 @@ pub trait DashboardData: UpdateToView {
     fn should_update(&self) -> bool {
         true
     }
+    fn set_enable_overview_data(&mut self, flag: bool);
 }
 
 pub trait DashboardState: Sized + Clone + UpdateToView {
