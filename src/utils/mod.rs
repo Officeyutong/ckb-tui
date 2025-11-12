@@ -1,3 +1,5 @@
+use number_prefix::NumberPrefix;
+
 pub mod bar_chart;
 
 #[macro_export]
@@ -32,4 +34,11 @@ pub fn shorten_hex(hex: impl AsRef<str>, keep_prefix: usize, keep_suffix: usize)
         &hex[..keep_prefix],
         &hex[hex.len() - keep_suffix..]
     )
+}
+
+pub fn hash_rate_to_string(hash_rate: f64) -> String {
+    match NumberPrefix::decimal(hash_rate) {
+        NumberPrefix::Standalone(s) => format!("{} H/s", s),
+        NumberPrefix::Prefixed(prefix, n) => format!("{:.2} {}H/s", n, prefix),
+    }
 }

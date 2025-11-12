@@ -27,7 +27,7 @@ use crate::{
         extract_epoch, get_average_block_time_and_estimated_epoch_time,
     },
     declare_names, update_text,
-    utils::{bar_chart::SimpleBarChart, shorten_hex},
+    utils::{bar_chart::SimpleBarChart, hash_rate_to_string, shorten_hex},
 };
 
 const TEST_DATA: [f64; 10] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
@@ -344,7 +344,7 @@ impl UpdateToView for BlockchainDashboardData {
         update_text!(siv, ALGORITHM, format!("{}", self.algorithm));
         if let Some(data) = &self.overview_data {
             update_text!(siv, DIFFICULTY, format!("{:x}", data.difficulty));
-            update_text!(siv, HASH_RATE, format!("{:.2} MH/s", data.hash_rate / 1e6));
+            update_text!(siv, HASH_RATE, hash_rate_to_string(data.hash_rate));
         } else {
             update_text!(siv, DIFFICULTY, format!("N/A"));
             update_text!(siv, HASH_RATE, format!("N/A"));

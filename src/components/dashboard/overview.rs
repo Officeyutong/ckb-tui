@@ -12,22 +12,16 @@ use cursive::{
 use numext_fixed_uint::{U256, u256};
 
 use crate::{
-    CURRENT_TAB,
     components::{
-        DashboardData, DashboardState, UpdateToView,
         dashboard::{
-            TUIEvent,
             overview::names::{
                 AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITTING_TX,
                 CONNECTED_PEERS, CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED,
                 DISK_USAGE, EPOCH, ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK,
                 PENDING_TX, PROPOSED_TX, RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
-            },
-        },
-        extract_epoch, get_average_block_time_and_estimated_epoch_time,
-    },
-    declare_names, update_text,
-    utils::bar_chart::SimpleBarChart,
+            }, TUIEvent
+        }, extract_epoch, get_average_block_time_and_estimated_epoch_time, DashboardData, DashboardState, UpdateToView
+    }, declare_names, update_text, utils::{bar_chart::SimpleBarChart, hash_rate_to_string}, CURRENT_TAB
 };
 
 declare_names!(
@@ -292,7 +286,7 @@ impl UpdateToView for OverviewDashboardState {
             update_text!(
                 siv,
                 names::HASH_RATE,
-                format!("{:.2} MH/s", data.hash_rate / 1000000.0)
+                hash_rate_to_string(data.hash_rate)
             );
         } else {
             siv.call_on_name(CPU_HISTORY, |view: &mut SimpleBarChart| {
