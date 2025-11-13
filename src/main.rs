@@ -179,17 +179,27 @@ fn main() -> anyhow::Result<()> {
                 BlockchainDashboardState::new(client.clone(), enable_fetch_overview);
             let mut mempool_state = MempoolDashboardState::new(args.tcp_url.clone());
             let mut logs_state = LogsDashboardState::new();
-
+            let mut tick_count = 0;
             loop {
-                cb_sink
-                    .send(Box::new(|siv| set_loading(siv, true)))
-                    .unwrap();
+                // Accept events per millisesond
+                tick_count += 1;
                 if let Ok(e) = event_rx.try_recv() {
                     overview_state.accept_event(&e);
                     blockchain_state.accept_event(&e);
                     mempool_state.accept_event(&e);
                     logs_state.accept_event(&e);
                 }
+                if tick_count < 300 {
+                    std::thread::sleep(Duration::from_millis(1));
+                    continue;
+                } else {
+                    // But only update state per 300 millisecond
+                    tick_count = 0;
+                }
+                log::info!("Updating state..");
+                cb_sink
+                    .send(Box::new(|siv| set_loading(siv, true)))
+                    .unwrap();
                 let result = (|| {
                     anyhow::Ok((
                         overview_state.update_state()?,
@@ -198,24 +208,21 @@ fn main() -> anyhow::Result<()> {
                         logs_state.update_state()?,
                     ))
                 })();
-                match result {
-                    Ok(_) => {}
-                    Err(e) => {
-                        cb_sink
-                            .send(Box::new(move |siv| {
-                                siv.add_layer(
-                                    Dialog::around(TextView::new(format!(
-                                        "Unable to update state: {:?}",
-                                        e
-                                    )))
-                                    .button("Ok", |siv| {
-                                        siv.pop_layer();
-                                    }),
-                                )
-                            }))
-                            .unwrap();
-                    }
-                };
+                if let Err(e) = result {
+                    cb_sink
+                        .send(Box::new(move |siv| {
+                            siv.add_layer(
+                                Dialog::around(TextView::new(format!(
+                                    "Unable to update state: {:?}",
+                                    e
+                                )))
+                                .button("Ok", |siv| {
+                                    siv.pop_layer();
+                                }),
+                            )
+                        }))
+                        .unwrap();
+                }
                 let overview_state = overview_state.clone();
                 let blockchain_state = blockchain_state.clone();
                 let mempool_state = mempool_state.clone();
@@ -233,7 +240,6 @@ fn main() -> anyhow::Result<()> {
                     pop_layer_at_end: false,
                 })
                 .ok();
-                std::thread::sleep(Duration::from_millis(500));
             }
         });
         event_tx

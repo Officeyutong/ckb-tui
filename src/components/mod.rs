@@ -44,7 +44,7 @@ fn get_average_block_time_and_estimated_epoch_time(
 
     let first_block_in_epoch = client
         .get_header_by_number((tip_header.inner.number.value() - epoch_block).into())
-        .with_context(|| anyhow!("Unable to get first block header in rpoch"))?
+        .with_context(|| anyhow!("Unable to get first block header in epoch"))?
         .unwrap();
     let time_diff_in_epoch =
         tip_header.inner.timestamp.value() - first_block_in_epoch.inner.timestamp.value();

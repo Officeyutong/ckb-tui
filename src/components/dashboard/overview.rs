@@ -169,7 +169,7 @@ impl OverviewDashboardState {
 
 impl DashboardState for OverviewDashboardState {
     fn update_state(&mut self) -> anyhow::Result<()> {
-        log::info!("Updating: OverviewDashboardState");
+        log::debug!("Updating: OverviewDashboardState");
         let now = chrono::Local::now();
         let diff_secs = ((now - self.last_update).num_milliseconds() as f64) / 1e3;
         if let Some(data) = &mut self.overview_data {
@@ -232,7 +232,7 @@ impl DashboardState for OverviewDashboardState {
         }
 
         self.last_update = chrono::Local::now();
-        log::info!("Updated: OverviewDashboardState");
+        log::debug!("Updated: OverviewDashboardState");
         Ok(())
     }
 }
@@ -424,7 +424,7 @@ impl DashboardData for OverviewDashboardData {
         &mut self,
         client: &CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
-        log::info!("Updating: OverviewDashboardData");
+        log::debug!("Updating: OverviewDashboardData");
         let peers = client
             .get_peers()
             .with_context(|| anyhow!("Unable to get peers"))?
@@ -473,7 +473,7 @@ impl DashboardData for OverviewDashboardData {
             enable_fetch_overview_data: self.enable_fetch_overview_data,
             overview_data,
         };
-        log::info!("Updated: OverviewDashboardData");
+        log::debug!("Updated: OverviewDashboardData");
         Ok(Box::new(self.clone()))
     }
 

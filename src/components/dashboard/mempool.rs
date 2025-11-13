@@ -169,22 +169,22 @@ impl MempoolDashboardState {
                         )
                         .await
                         .with_context(|| anyhow!("Unable to subscribe rejected_transaction"))?;
-                    log::info!("Before subscribe select loop");
+                    log::trace!("Before subscribe select loop");
                     loop {
                         tokio::select! {
                             _ = stop_rx.recv() => {
-                                log::debug!("Exiting tx subscribing thread");
+                                log::trace!("Exiting tx subscribing thread");
                                 break;
                             }
                             Some(Ok(r)) = new_tx_sub.next() => {
-                                log::debug!("Received transaction sub: {:?}", r);
+                                log::trace!("Received transaction sub: {:?}", r);
                                 update_latest_tx(match self_cloned{
                                     MempoolDashboardState::WithTcpConn(ref mempool_dashboatd_inner_state) => mempool_dashboatd_inner_state,
                                     MempoolDashboardState::WithoutTcpConn => unreachable!(),
                                 }, r.1);
                             }
                             Some(Ok(r)) = new_rejection_sub.next() => {
-                                log::debug!("Received rejected tx sub: {:?}", r);
+                                log::trace!("Received rejected tx sub: {:?}", r);
                                 update_rejected_tx(match self_cloned{
                                     MempoolDashboardState::WithTcpConn(ref mempool_dashboatd_inner_state) => mempool_dashboatd_inner_state,
                                     MempoolDashboardState::WithoutTcpConn => unreachable!(),
@@ -299,7 +299,7 @@ impl DashboardData for MempoolDashboardData {
         &mut self,
         client: &CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
-        log::info!("Updating: MempoolDashboardData");
+        log::debug!("Updating: MempoolDashboardData");
         let fee_rate_statistics = client
             .get_fee_rate_statistics(None)
             .with_context(|| anyhow!("Unable to get fee rate statistics"))?;
@@ -329,7 +329,7 @@ impl DashboardData for MempoolDashboardData {
             average_block_time,
             enable_fetch_overview: self.enable_fetch_overview,
         };
-        log::info!("Updated: PeersDashboardData");
+        log::debug!("Updated: PeersDashboardData");
         Ok(Box::new(self.clone()))
     }
     fn should_update(&self) -> bool {

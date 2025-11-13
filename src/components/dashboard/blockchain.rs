@@ -102,17 +102,17 @@ impl UpdateToView for BlockchainDashboardState {
 
 impl DashboardState for BlockchainDashboardState {
     fn accept_event(&mut self, event: &TUIEvent) {
-        if let Some(consensus) = self.consensus.clone() {
-            match event {
-                TUIEvent::OpenConsensusModal(sender) => {
+        match event {
+            TUIEvent::OpenConsensusModal(sender) => {
+                if let Some(consensus) = self.consensus.clone() {
                     sender
                         .send(Box::new(move |siv| {
                             siv.add_layer(consensus_modal(&consensus));
                         }))
                         .unwrap();
                 }
-                _ => {}
             }
+            _ => {}
         }
     }
     fn update_state(&mut self) -> anyhow::Result<()> {
@@ -251,7 +251,7 @@ impl DashboardData for BlockchainDashboardData {
         &mut self,
         client: &ckb_sdk::CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
-        log::info!("Updating: BlockchainDashboardData");
+        log::debug!("Updating: BlockchainDashboardData");
         let tip_header = client
             .get_tip_header()
             .with_context(|| anyhow!("Unable to get tip header"))?;
@@ -315,7 +315,7 @@ impl DashboardData for BlockchainDashboardData {
             overview_data,
             scripts,
         };
-        log::info!("Updated: MempoolDashboardData");
+        log::debug!("Updated: MempoolDashboardData");
         Ok(Box::new(self.clone()))
     }
 }

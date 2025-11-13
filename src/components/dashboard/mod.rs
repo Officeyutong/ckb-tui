@@ -59,7 +59,7 @@ impl DashboardData for GeneralDashboardData {
         &mut self,
         client: &CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
-        log::info!("Updating: GeneralDashboardData");
+        log::debug!("Updating: GeneralDashboardData");
         let block_chain_info = client
             .get_blockchain_info()
             .with_context(|| anyhow!("Unable to get block chain info"))?;
@@ -80,7 +80,7 @@ impl DashboardData for GeneralDashboardData {
             version,
             enable_fetch_overview_data: self.enable_fetch_overview_data,
         };
-        log::info!("Updated: GeneralDashboardData");
+        log::debug!("Updated: GeneralDashboardData");
         Ok(Box::new(self.clone()))
     }
 
