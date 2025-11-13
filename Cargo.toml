@@ -10,7 +10,7 @@ ckb-jsonrpc-types = "0.202.0"
 ckb-jsonrpc-types-new = {git = "https://github.com/nervosnetwork/ckb", branch = "zhangsoledad/tui", package = "ckb-jsonrpc-types"}
 ckb-sdk = "4.1.0"
 clap = {version = "4.5.46", features = ["derive"]}
-cursive = "0.21.1"
+cursive = { version = "0.21.1", features = ["toml"] }
 cursive-aligned-view = "0.7.0"
 cursive-async-view = "0.8.0"
 cursive_table_view = "0.15.0"

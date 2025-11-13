@@ -53,6 +53,10 @@ struct Args {
     /// Refresh interval of displayed data, defaults to 300ms
     #[arg(short = 'i', long, default_value_t = 300)]
     refresh_interval: usize,
+
+    /// Theme file to use for cursive. See https://github.com/gyscos/cursive/blob/main/cursive/examples/assets/style.toml for an example.
+    #[arg(long)]
+    theme_file: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -61,6 +65,9 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let client = CkbRpcClient::new(&args.rpc_url);
     let mut siv = cursive::default();
+    if let Some(theme_file) = args.theme_file {
+        siv.load_theme_file(theme_file).unwrap();
+    }
     siv.add_global_callback('q', |s| s.quit());
     siv.add_global_callback('~', cursive::Cursive::toggle_debug_console);
     let loading_variable = Arc::new(AtomicBool::new(false));
