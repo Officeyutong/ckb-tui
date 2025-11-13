@@ -15,6 +15,7 @@ use cursive::{
     views::{LinearLayout, Panel, RadioGroup, TextView},
 };
 use cursive_aligned_view::Alignable;
+use cursive_spinner_view::SpinnerView;
 
 use crate::{
     CURRENT_TAB,
@@ -24,7 +25,7 @@ use crate::{
             blockchain::blockchain_dashboard,
             logs::{FilterLogOption, logs_dashboard},
             mempool::mempool_dashboard,
-            names::{MAIN_LAYOUT, REFRESHING_LABEL, TITLE},
+            names::{MAIN_LAYOUT, REFRESHING_SPINNER, TITLE},
             overview::basic_info_dashboard,
             peers::peers_dashboard,
         },
@@ -32,7 +33,7 @@ use crate::{
     declare_names,
 };
 
-declare_names!(names, "dashboard_", TITLE, REFRESHING_LABEL, MAIN_LAYOUT);
+declare_names!(names, "dashboard_", TITLE, REFRESHING_SPINNER, MAIN_LAYOUT);
 #[derive(Clone, Default)]
 pub struct GeneralDashboardData {
     pub network_name: String,
@@ -89,7 +90,10 @@ impl DashboardData for GeneralDashboardData {
     }
 }
 
-pub fn dashboard(event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {
+pub fn dashboard(
+    event_sender: mpsc::Sender<TUIEvent>,
+    cursive: &mut Cursive,
+) -> impl IntoBoxedView + use<> {
     let event_sender_0 = event_sender.clone();
     let event_sender_1 = event_sender.clone();
     let event_sender_2 = event_sender.clone();
@@ -109,7 +113,12 @@ pub fn dashboard(event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + u
     Panel::new(
         LinearLayout::vertical()
             .child(TextView::new("CKB Node Monitor").center().with_name(TITLE))
-            .child(TextView::new(" ").center().with_name(REFRESHING_LABEL))
+            .child(
+                LinearLayout::horizontal()
+                    .child(TextView::new(" "))
+                    .child(SpinnerView::new(cursive.cb_sink().clone()).with_name(REFRESHING_SPINNER))
+                    .align_center(),
+            )
             .child(
                 LinearLayout::horizontal()
                     .child(tab_selector.button(0, "Overview").fixed_width(15))
@@ -136,11 +145,11 @@ fn switch_panel(siv: &mut Cursive, panel: impl IntoBoxedView + 'static, panel_in
 }
 
 pub fn set_loading(siv: &mut Cursive, loading: bool) {
-    siv.call_on_name(REFRESHING_LABEL, move |view: &mut TextView| {
+    siv.call_on_name(REFRESHING_SPINNER, move |view: &mut SpinnerView| {
         if loading {
-            view.set_content("Refreshing...");
+            view.spin_up();
         } else {
-            view.set_content(" ");
+            view.spin_down();
         }
     });
 }

@@ -44,12 +44,15 @@ enum SyncRequest {
 #[command(version, about, long_about = None)]
 struct Args {
     /// RPC endpoint of CKB node
-    #[arg(short, long, default_value_t = String::from("http://127.0.0.1:8114"))]
+    #[arg(short = 'r', long, default_value_t = String::from("http://127.0.0.1:8114"))]
     rpc_url: String,
     /// TCP endpoint of CKB node, used for receiving pushed transactions data
     /// If not provided, latest transactions and rejected transactions won't be displayed
     #[arg(short, long)]
     tcp_url: Option<String>,
+    /// Refresh interval of displayed data, defaults to 300ms
+    #[arg(short = 'i', long, default_value_t = 300)]
+    refresh_interval: usize,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -150,6 +153,7 @@ fn main() -> anyhow::Result<()> {
     };
     {
         let tx = sync_request_tx.clone();
+        let loading_variable = loading_variable.clone();
         siv.add_global_callback('r', move |siv| {
             if loading_variable.load(std::sync::atomic::Ordering::SeqCst) {
                 return;
@@ -189,7 +193,7 @@ fn main() -> anyhow::Result<()> {
                     mempool_state.accept_event(&e);
                     logs_state.accept_event(&e);
                 }
-                if tick_count < 300 {
+                if tick_count < args.refresh_interval {
                     std::thread::sleep(Duration::from_millis(1));
                     continue;
                 } else {
@@ -249,8 +253,10 @@ fn main() -> anyhow::Result<()> {
             pop_layer_at_end: false,
         })
         .unwrap();
+    let ui = dashboard(event_sender, &mut siv);
+
     siv.set_autorefresh(true);
-    siv.add_layer(dashboard(event_sender));
+    siv.add_layer(ui);
     siv.run();
     sync_request_tx.send(SyncRequest::Stop).ok();
     Ok(())

@@ -778,6 +778,7 @@ dependencies = [
  "cursive",
  "cursive-aligned-view",
  "cursive-async-view",
+ "cursive-spinner-view",
  "cursive_table_view",
  "http",
  "log",
@@ -1165,6 +1166,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac7ac0eb0cede3dfdfebf4d5f22354e05a730b79c25fd03481fc69fcfba0a73e"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "cursive-spinner-view"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1204f7d5aa30cfaba33ec518c6655e5c479e471eacfa7978868ce9417fb6e60"
+dependencies = [
+ "cursive_core",
 ]
 
 [[package]]
