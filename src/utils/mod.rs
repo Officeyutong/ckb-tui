@@ -42,3 +42,10 @@ pub fn hash_rate_to_string(hash_rate: f64) -> String {
         NumberPrefix::Prefixed(prefix, n) => format!("{:.2} {}H/s", n, prefix),
     }
 }
+
+pub fn difficulty_to_string(difficulty: f64) -> String {
+    match NumberPrefix::decimal(difficulty) {
+        NumberPrefix::Standalone(s) => format!("{} H", s),
+        NumberPrefix::Prefixed(prefix, n) => format!("{:.2} {}H", n, prefix),
+    }
+}

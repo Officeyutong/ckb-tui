@@ -9,25 +9,18 @@ use cursive::{
     views::{Button, Dialog, LinearLayout, NamedView, Panel, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
-use numext_fixed_uint::U256;
 use queue::Queue;
 
 use crate::{
-    CURRENT_TAB,
     components::{
-        DashboardData, DashboardState, UpdateToView,
         dashboard::{
-            TUIEvent,
             blockchain::names::{
                 ALGORITHM, AVERAGE_BLOCK_TIME, BLOCK_HEIGHT, DIFFICULTY, EPOCH,
                 ESTIMATED_EPOCH_TIME, HASH_RATE, LIVE_CELLS, LIVE_CELLS_HISTORY, OCCUPIED_CAPACITY,
                 OCCUPIED_CAPACITY_HISTORY, SCRIPT_TABLE,
-            },
-        },
-        extract_epoch, get_average_block_time_and_estimated_epoch_time,
-    },
-    declare_names, update_text,
-    utils::{bar_chart::SimpleBarChart, hash_rate_to_string, shorten_hex},
+            }, TUIEvent
+        }, extract_epoch, get_average_block_time_and_estimated_epoch_time, DashboardData, DashboardState, UpdateToView
+    }, declare_names, update_text, utils::{bar_chart::SimpleBarChart, difficulty_to_string, hash_rate_to_string, shorten_hex}, CURRENT_TAB
 };
 
 const TEST_DATA: [f64; 10] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
@@ -218,7 +211,7 @@ impl TableViewItem<ScriptColumn> for ScriptItem {
 
 #[derive(Clone)]
 pub struct GetOverviewOfBlockchainDashboardData {
-    difficulty: U256,
+    difficulty: f64,
     hash_rate: f64,
 }
 
@@ -261,7 +254,7 @@ impl DashboardData for BlockchainDashboardData {
         let overview_data = if self.enable_overview_data {
             let data = client.post::<(), Overview>("get_overview", ())?;
             Some(GetOverviewOfBlockchainDashboardData {
-                difficulty: data.mining.difficulty,
+                difficulty: data.mining.difficulty.to_string().parse::<f64>().unwrap(),
                 hash_rate: data.mining.hash_rate.to_string().parse::<f64>().unwrap(),
             })
         } else {
@@ -343,7 +336,7 @@ impl UpdateToView for BlockchainDashboardData {
         );
         update_text!(siv, ALGORITHM, format!("{}", self.algorithm));
         if let Some(data) = &self.overview_data {
-            update_text!(siv, DIFFICULTY, format!("{:x}", data.difficulty));
+            update_text!(siv, DIFFICULTY, difficulty_to_string(data.difficulty));
             update_text!(siv, HASH_RATE, hash_rate_to_string(data.hash_rate));
         } else {
             update_text!(siv, DIFFICULTY, format!("N/A"));

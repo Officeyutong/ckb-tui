@@ -9,7 +9,6 @@ use cursive::{
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
     views::{LinearLayout, NamedView, Panel, ProgressBar, TextView},
 };
-use numext_fixed_uint::{U256, u256};
 
 use crate::{
     components::{
@@ -21,7 +20,7 @@ use crate::{
                 PENDING_TX, PROPOSED_TX, RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
             }, TUIEvent
         }, extract_epoch, get_average_block_time_and_estimated_epoch_time, DashboardData, DashboardState, UpdateToView
-    }, declare_names, update_text, utils::{bar_chart::SimpleBarChart, hash_rate_to_string}, CURRENT_TAB
+    }, declare_names, update_text, utils::{bar_chart::SimpleBarChart, difficulty_to_string, hash_rate_to_string}, CURRENT_TAB
 };
 
 declare_names!(
@@ -74,7 +73,7 @@ struct GetOverviewOfOverviewDashboardState {
     pub disk_used: u64,
     pub disk_total: u64,
 
-    pub difficulty: U256,
+    pub difficulty: f64,
     pub hash_rate: f64,
 }
 
@@ -150,7 +149,7 @@ impl OverviewDashboardState {
                 disk_used,
                 ram_total,
                 ram_used,
-                difficulty: u256!("0"),
+                difficulty: 0.0,
                 hash_rate: 0.0,
             })
         } else {
@@ -187,7 +186,12 @@ impl DashboardState for OverviewDashboardState {
                 .to_string()
                 .parse::<f64>()
                 .unwrap();
-            data.difficulty = overview_data.mining.difficulty.clone();
+            data.difficulty = overview_data
+                .mining
+                .difficulty
+                .to_string()
+                .parse::<f64>()
+                .unwrap();
 
             {
                 let (read, write) =
@@ -282,12 +286,8 @@ impl UpdateToView for OverviewDashboardState {
                     (data.disk_used as f64 / data.disk_total as f64 * 100.0)
                 )
             );
-            update_text!(siv, names::DIFFICULTY, format!("{:x}", data.difficulty));
-            update_text!(
-                siv,
-                names::HASH_RATE,
-                hash_rate_to_string(data.hash_rate)
-            );
+            update_text!(siv, names::DIFFICULTY, difficulty_to_string(data.difficulty));
+            update_text!(siv, names::HASH_RATE, hash_rate_to_string(data.hash_rate));
         } else {
             siv.call_on_name(CPU_HISTORY, |view: &mut SimpleBarChart| {
                 view.set_data(&vec![]).unwrap();
