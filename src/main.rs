@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use anyhow::bail;
 use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use clap::Parser;
@@ -71,6 +72,12 @@ fn main() -> anyhow::Result<()> {
     siv.add_global_callback('q', |s| s.quit());
     siv.add_global_callback('~', cursive::Cursive::toggle_debug_console);
     let loading_variable = Arc::new(AtomicBool::new(false));
+    if let Err(e) = client.local_node_info() {
+        bail!(
+            "Unable to send a basic request (local_node_info) to RPC server: {}, please check RPC url",
+            e
+        );
+    }
     let enable_fetch_overview = match client.post::<(), Overview>("get_overview", ()) {
         Ok(_) => true,
         Err(_) => false,
