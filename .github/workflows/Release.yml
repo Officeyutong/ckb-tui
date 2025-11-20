@@ -16,17 +16,17 @@ jobs:
             artifact_name: release-linux
             asset_name: ckb-tui-linux-amd64
             ckb_name: ckb
-            tarball_name: ckb-tui-with-node.tar.gz
+            tarball_name: ckb-tui-with-node-linux-amd64.tar.gz
           - os: windows-latest
             artifact_name: release-windows
             asset_name: ckb-tui-windows-amd64.exe
             ckb_name: ckb.exe
-            tarball_name: ckb-tui-with-node.zip
+            tarball_name: ckb-tui-with-node-windows-amd64.zip
           - os: macos-latest
             artifact_name: release-macos
             asset_name: ckb-tui-macos-amd64
             ckb_name: ckb
-            tarball_name: ckb-tui-with-node.tar.gz
+            tarball_name: ckb-tui-with-node-macos-aarch64.tar.gz
 
     steps:
       - name: Checkout code
@@ -40,13 +40,13 @@ jobs:
 
       - name: Clone ckb 
         run: |
-          git clone --recursive https://github.com/nervosnetwork/ckb
-          cd ckb
+          git clone --recursive https://github.com/nervosnetwork/ckb ckb-4989
+          cd ckb-4989
           git checkout zhangsoledad/tui
 
       - name: Build ckb with PR 4989
         run: |
-          cd ckb
+          cd ckb-4989
           cargo build --release --locked --bin ckb --features portable
 
       - name: Build release binary
@@ -56,14 +56,14 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cp target/release/ckb-tui ${{ matrix.asset_name }}
-          cp ckb/target/release/ckb ${{ matrix.ckb_name }}
+          cp ckb-4989/target/release/ckb ${{ matrix.ckb_name }}
           tar -czf ${{ matrix.tarball_name }} ${{ matrix.asset_name }} ${{ matrix.ckb_name }}
 
       - name: Prepare artifact (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cp target/release/ckb-tui.exe ${{ matrix.asset_name }}
-          cp ckb/target/release/ckb.exe ${{ matrix.ckb_name }}
+          cp ckb-4989/target/release/ckb.exe ${{ matrix.ckb_name }}
 
       - name: Tarball files (Windows)
         uses: vimtor/action-zip@v1.2
