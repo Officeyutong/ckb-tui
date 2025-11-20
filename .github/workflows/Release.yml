@@ -40,13 +40,13 @@ jobs:
 
       - name: Clone ckb 
         run: |
-          git clone --recursive https://github.com/nervosnetwork/ckb
-          cd ckb
+          git clone --recursive https://github.com/nervosnetwork/ckb -O ckb-4989
+          cd ckb-4989
           git checkout zhangsoledad/tui
 
       - name: Build ckb with PR 4989
         run: |
-          cd ckb
+          cd ckb-4989
           cargo build --release --locked --bin ckb --features portable
 
       - name: Build release binary
@@ -56,7 +56,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cp target/release/ckb-tui ${{ matrix.asset_name }}
-          cp ckb/target/release/ckb ${{ matrix.ckb_name }}
+          cp ckb-4989/target/release/ckb ${{ matrix.ckb_name }}
           tar -czf ${{ matrix.tarball_name }} ${{ matrix.asset_name }} ${{ matrix.ckb_name }}
 
       - name: Prepare artifact (Windows)
