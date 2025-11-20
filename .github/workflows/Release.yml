@@ -16,14 +16,20 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact_name: release-linux
             asset_name: ckb-tui-linux-amd64
+            ckb_name: ckb
+            tarball_name: ckb-tui-with-node.tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: release-windows
             asset_name: ckb-tui-windows-amd64.exe
+            ckb_name: ckb.exe
+            tarball_name: ckb-tui-with-node.zip
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: release-macos
             asset_name: ckb-tui-macos-amd64
+            ckb_name: ckb
+            tarball_name: ckb-tui-with-node.tar.gz
 
     steps:
       - name: Checkout code
@@ -39,21 +45,42 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Clone ckb 
+        run: |
+          git clone --recursive https://github.com/nervosnetwork/ckb
+          cd ckb
+          git checkout zhangsoledad/tui
+
+      - name: Build ckb with PR 4989
+        run: |
+          cd ckb
+          cargo build --release --target ${{ matrix.target }} --locked --bin ckb --features portable
+
       - name: Prepare artifact (Unix)
         if: matrix.os != 'windows-latest'
         run: |
           cp target/${{ matrix.target }}/release/ckb-tui ${{ matrix.asset_name }}
+          cp ckb/target/${{ matrix.target }}/release/ckb ${{ matrix.ckb_name }}
+          tar -czf ${{ matrix.tarball_name }} ${{ matrix.asset_name }} ${{ matrix.ckb_name }}
 
       - name: Prepare artifact (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cp target/${{ matrix.target }}/release/ckb-tui.exe ${{ matrix.asset_name }}
+          cp ckb/target/${{ matrix.target }}/release/ckb.exe ${{ matrix.ckb_name }}
+
+      - name: Tarball files (Windows)
+        uses: vimtor/action-zip@v1.2
+        if: matrix.os == 'windows-latest'
+        with:
+          files: ${{ matrix.ckb_name }} ${{ matrix.asset_name }}
+          dest: ${{ matrix.tarball_name }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.asset_name }}
+          path: ${{ matrix.tarball_name }}
 
   release:
     name: Create Release
