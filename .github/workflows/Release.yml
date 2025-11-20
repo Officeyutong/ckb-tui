@@ -51,6 +51,9 @@ jobs:
           cd ckb
           git checkout zhangsoledad/tui
 
+      - run: rustup target add x86_64-apple-darwin
+        if: matrix.os == 'macos-latest'
+
       - name: Build ckb with PR 4989
         run: |
           cd ckb
