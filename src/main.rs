@@ -30,6 +30,7 @@ use crate::components::{
         peers::PeersDashboardData,
         set_loading,
     },
+    details::menu::details_menu,
 };
 
 pub static CURRENT_TAB: AtomicUsize = AtomicUsize::new(0);
@@ -71,6 +72,10 @@ fn main() -> anyhow::Result<()> {
     }
     siv.add_global_callback('q', |s| s.quit());
     siv.add_global_callback('~', cursive::Cursive::toggle_debug_console);
+    let client_cloned = client.clone();
+    siv.add_global_callback('m', move |s| {
+        s.add_layer(details_menu(&client_cloned));
+    });
     let loading_variable = Arc::new(AtomicBool::new(false));
     if let Err(e) = client.local_node_info() {
         bail!(
