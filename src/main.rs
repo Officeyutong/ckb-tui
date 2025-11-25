@@ -219,7 +219,7 @@ fn main() -> anyhow::Result<()> {
                     // But only update state per 300 millisecond
                     tick_count = 0;
                 }
-                log::info!("Updating state..");
+                log::debug!("Updating state..");
                 cb_sink
                     .send(Box::new(|siv| set_loading(siv, true)))
                     .unwrap();

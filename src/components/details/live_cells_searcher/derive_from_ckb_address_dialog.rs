@@ -1,33 +1,28 @@
 use std::str::FromStr;
 
 use anyhow::{Context, anyhow, bail};
-use ckb_sdk::{Address, CkbRpcClient};
+use ckb_gen_types::core::ScriptHashType;
+use ckb_sdk::Address;
 use cursive::{
     CbSink, Cursive,
-    view::{IntoBoxedView, Nameable, Resizable},
-    views::{
-        Button, Dialog, DummyView, EditView, LinearLayout, ListView, Panel, RadioButton,
-        RadioGroup, TextView,
-    },
+    view::{IntoBoxedView, Nameable},
+    views::{Button, Dialog, EditView, LinearLayout, Panel, RadioButton, RadioGroup, TextView},
 };
-use cursive_aligned_view::Alignable;
 use cursive_spinner_view::SpinnerView;
 use log::info;
 use serde::Deserialize;
 
 use crate::{
-    components::details::live_cells_searcher::names::{
+    components::details::live_cells_searcher::derive_from_ckb_address_dialog::names::{
         ADDRESS_INPUT, CKB_CLI_ACCOUNT_ENTRY, CKB_CLI_ACCOUNTS, CKB_CLI_ACCOUNTS_VIEW,
-        LOAD_CKB_CLI_ACCOUNT, LOAD_CKB_CLI_ACCOUNT_SPINNER, LOCK_ARGS, LOCK_HASH,
+        LOAD_CKB_CLI_ACCOUNT, LOAD_CKB_CLI_ACCOUNT_SPINNER,
     },
     declare_names,
 };
 
 declare_names!(
     names,
-    "live_cells_searcher_",
-    LOCK_ARGS,
-    LOCK_HASH,
+    "live_cells_searcher_derive_from_ckb_address_dialog_",
     ADDRESS_INPUT,
     LOAD_CKB_CLI_ACCOUNT,
     LOAD_CKB_CLI_ACCOUNT_SPINNER,
@@ -44,55 +39,6 @@ struct CkbCliAccount {
 struct CkbCliAccountAddress {
     mainnet: String,
     testnet: String,
-}
-
-pub fn live_cells_searcher(client: &CkbRpcClient) -> impl IntoBoxedView {
-    Dialog::new()
-        .button("Search", move |siv| {})
-        .button("Close", |siv| {
-            siv.pop_layer();
-        })
-        .title("Live Cells Searcher")
-        .content(
-            LinearLayout::vertical()
-                .child(
-                    ListView::new()
-                        .child(
-                            "Lock Args:",
-                            EditView::new().with_name(LOCK_ARGS).min_width(50),
-                        )
-                        .child(" ", DummyView::new())
-                        .child(
-                            "Lock Hash:",
-                            EditView::new().with_name(LOCK_HASH).min_width(50),
-                        )
-                        .min_width(50),
-                )
-                .child(DummyView::new())
-                .child(
-                    Button::new("Derive from CKB address", move |siv| {
-                        let cb_sink = siv.cb_sink().clone();
-                        let cb_sink_2 = siv.cb_sink().clone();
-
-                        siv.add_layer(derive_from_address(
-                            move |lock_args, lock_hash| {
-                                cb_sink
-                                    .send(Box::new(move |siv| {
-                                        siv.call_on_name(LOCK_ARGS, |view: &mut EditView| {
-                                            view.set_content(lock_args)
-                                        });
-                                        siv.call_on_name(LOCK_HASH, |view: &mut EditView| {
-                                            view.set_content(lock_hash)
-                                        });
-                                    }))
-                                    .unwrap();
-                            },
-                            cb_sink_2.clone(),
-                        ));
-                    })
-                    .align_center(),
-                ),
-        )
 }
 
 fn load_ckb_cli_account(siv: &mut Cursive) {
@@ -155,8 +101,8 @@ fn load_ckb_cli_account(siv: &mut Cursive) {
     });
 }
 
-fn derive_from_address(
-    callback: impl Fn(String, String) + Send + Sync + 'static,
+pub fn derive_from_address_dialog(
+    callback: impl Fn(String, String, ScriptHashType) + Send + Sync + 'static,
     cb_sink: CbSink,
 ) -> impl IntoBoxedView {
     let mut choice_group = RadioGroup::<String>::new();
@@ -237,7 +183,25 @@ fn derive_from_address(
                     for item in payload.code_hash(None).raw_data().iter() {
                         hash_output.push_str(&format!("{:02x}", item));
                     }
-                    callback(args_output, hash_output);
+                    if !matches!(
+                        payload.hash_type(),
+                        ScriptHashType::Data
+                            | ScriptHashType::Data1
+                            | ScriptHashType::Data2
+                            | ScriptHashType::Type
+                    ) {
+                        siv.add_layer(
+                            Dialog::around(TextView::new(
+                                "Only supports ScriptHashType of Type, Data, Data1, Data2",
+                            ))
+                            .title("Error")
+                            .button("Close", |siv| {
+                                siv.pop_layer();
+                            }),
+                        );
+                        return;
+                    }
+                    callback(args_output, hash_output, payload.hash_type());
                     siv.pop_layer();
                 }
                 Err(e) => {

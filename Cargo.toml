@@ -6,9 +6,9 @@ version = "0.1.1"
 [dependencies]
 anyhow = "1.0.99"
 chrono = "0.4.42"
-ckb-jsonrpc-types = "0.202.0"
+ckb-jsonrpc-types = "1.0.0"
 ckb-jsonrpc-types-new = {git = "https://github.com/nervosnetwork/ckb", branch = "zhangsoledad/tui", package = "ckb-jsonrpc-types"}
-ckb-sdk = "4.1.0"
+ckb-sdk = "5.0.0"
 clap = {version = "4.5.46", features = ["derive"]}
 cursive = { version = "0.21.1", features = ["toml"] }
 cursive-aligned-view = "0.7.0"
@@ -25,3 +25,7 @@ number_prefix = "0.4.0"
 cursive-spinner-view = "0.1.5"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml = "0.9.34"
+ckb-gen-types = "1.0.0"
+serde_json = "1.0.145"
+ckb-fixed-hash-core = "1.0.0"
+byteutils = "0.1.1"
