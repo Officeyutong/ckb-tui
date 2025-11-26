@@ -53,7 +53,7 @@ pub fn live_cells_searcher(client: &CkbRpcClient) -> impl IntoBoxedView {
                         )
                         .child(" ", DummyView::new())
                         .child(
-                            "Lock Hash:",
+                            "Code Hash:",
                             EditView::new().with_name(LOCK_HASH).min_width(50),
                         )
                         .child(" ", DummyView::new())
@@ -65,16 +65,19 @@ pub fn live_cells_searcher(client: &CkbRpcClient) -> impl IntoBoxedView {
                                         .button(ScriptHashType::Type, "Type")
                                         .with_name(HASH_TYPE_RADIO_TYPE),
                                 )
+                                .child(DummyView::new().min_width(5))
                                 .child(
                                     script_hash_type_radios
                                         .button(ScriptHashType::Data, "Data")
                                         .with_name(HASH_TYPE_RADIO_DATA),
                                 )
+                                .child(DummyView::new().min_width(5))
                                 .child(
                                     script_hash_type_radios
                                         .button(ScriptHashType::Data1, "Data1")
                                         .with_name(HASH_TYPE_RADIO_DATA1),
                                 )
+                                .child(DummyView::new().min_width(5))
                                 .child(
                                     script_hash_type_radios
                                         .button(ScriptHashType::Data2, "Data2")

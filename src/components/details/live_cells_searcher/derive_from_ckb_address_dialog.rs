@@ -75,7 +75,12 @@ fn load_ckb_cli_account(siv: &mut Cursive) {
             Err(e) => {
                 cb_sink
                     .send(Box::new(move |siv| {
-                        siv.add_layer(Dialog::around(TextView::new(format!("{:?}", e))));
+                        siv.add_layer(Dialog::around(TextView::new(format!("{:?}", e))).button(
+                            "Close",
+                            |siv| {
+                                siv.pop_layer();
+                            },
+                        ));
                     }))
                     .unwrap();
                 return;
