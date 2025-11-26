@@ -132,7 +132,7 @@ pub fn dashboard(
             )
             .child(basic_info_dashboard(event_sender.clone()))
             .child(Panel::new(TextView::new(
-                "Press [Q] to quit, [Tab] to switch panels, [R] to refresh",
+                "Press [Q] to quit, [Tab] to switch panels, [R] to refresh, [M] for menu",
             )))
             .with_name(MAIN_LAYOUT),
     )
