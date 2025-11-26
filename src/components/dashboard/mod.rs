@@ -116,7 +116,9 @@ pub fn dashboard(
             .child(
                 LinearLayout::horizontal()
                     .child(TextView::new(" "))
-                    .child(SpinnerView::new(cursive.cb_sink().clone()).with_name(REFRESHING_SPINNER))
+                    .child(
+                        SpinnerView::new(cursive.cb_sink().clone()).with_name(REFRESHING_SPINNER),
+                    )
                     .align_center(),
             )
             .child(

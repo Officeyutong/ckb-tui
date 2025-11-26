@@ -1,4 +1,4 @@
-use std::{sync::mpsc, u64};
+use std::sync::mpsc;
 
 use anyhow::{Context, anyhow};
 use ckb_jsonrpc_types::Consensus;
@@ -12,15 +12,21 @@ use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
 
 use crate::{
+    CURRENT_TAB,
     components::{
+        DashboardData, DashboardState, UpdateToView,
         dashboard::{
+            TUIEvent,
             blockchain::names::{
                 ALGORITHM, AVERAGE_BLOCK_TIME, BLOCK_HEIGHT, DIFFICULTY, EPOCH,
                 ESTIMATED_EPOCH_TIME, HASH_RATE, LIVE_CELLS, LIVE_CELLS_HISTORY, OCCUPIED_CAPACITY,
                 OCCUPIED_CAPACITY_HISTORY, SCRIPT_TABLE,
-            }, TUIEvent
-        }, extract_epoch, get_average_block_time_and_estimated_epoch_time, DashboardData, DashboardState, UpdateToView
-    }, declare_names, update_text, utils::{bar_chart::SimpleBarChart, difficulty_to_string, hash_rate_to_string, shorten_hex}, CURRENT_TAB
+            },
+        },
+        extract_epoch, get_average_block_time_and_estimated_epoch_time,
+    },
+    declare_names, update_text,
+    utils::{bar_chart::SimpleBarChart, difficulty_to_string, hash_rate_to_string, shorten_hex},
 };
 
 const TEST_DATA: [f64; 10] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
@@ -83,11 +89,11 @@ impl UpdateToView for BlockchainDashboardState {
         } else {
             update_text!(siv, LIVE_CELLS, format!("N/A"));
             siv.call_on_name(LIVE_CELLS_HISTORY, |view: &mut SimpleBarChart| {
-                view.set_data(&vec![]).unwrap();
+                view.set_data(&[]).unwrap();
             });
             update_text!(siv, OCCUPIED_CAPACITY, format!("N/A"));
             siv.call_on_name(OCCUPIED_CAPACITY_HISTORY, |view: &mut SimpleBarChart| {
-                view.set_data(&vec![]).unwrap();
+                view.set_data(&[]).unwrap();
             });
         }
     }
@@ -95,17 +101,14 @@ impl UpdateToView for BlockchainDashboardState {
 
 impl DashboardState for BlockchainDashboardState {
     fn accept_event(&mut self, event: &TUIEvent) {
-        match event {
-            TUIEvent::OpenConsensusModal(sender) => {
-                if let Some(consensus) = self.consensus.clone() {
-                    sender
-                        .send(Box::new(move |siv| {
-                            siv.add_layer(consensus_modal(&consensus));
-                        }))
-                        .unwrap();
-                }
+        if let TUIEvent::OpenConsensusModal(sender) = event {
+            if let Some(consensus) = self.consensus.clone() {
+                sender
+                    .send(Box::new(move |siv| {
+                        siv.add_layer(consensus_modal(&consensus));
+                    }))
+                    .unwrap();
             }
-            _ => {}
         }
     }
     fn update_state(&mut self) -> anyhow::Result<()> {

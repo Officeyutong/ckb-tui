@@ -83,10 +83,7 @@ fn main() -> anyhow::Result<()> {
             e
         );
     }
-    let enable_fetch_overview = match client.post::<(), Overview>("get_overview", ()) {
-        Ok(_) => true,
-        Err(_) => false,
-    };
+    let enable_fetch_overview = client.post::<(), Overview>("get_overview", ()).is_ok();
     let sync_request_tx = {
         let (tx, rx) = std::sync::mpsc::channel::<SyncRequest>();
         let cb_sink = siv.cb_sink().clone();
@@ -99,11 +96,8 @@ fn main() -> anyhow::Result<()> {
                 let result = general_data.fetch_data_through_client(&client);
                 cb_sink
                     .send(Box::new(move |siv| {
-                        match result {
-                            Ok(result) => {
-                                result.update_to_view(siv);
-                            }
-                            Err(_) => {}
+                        if let Ok(result) = result {
+                            result.update_to_view(siv);
                         };
                     }))
                     .unwrap();

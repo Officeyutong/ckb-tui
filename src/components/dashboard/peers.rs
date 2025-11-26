@@ -122,7 +122,7 @@ impl UpdateToView for PeersDashboardData {
             siv,
             AVG_LATENCY,
             if self.peers.is_empty() {
-                format!("N/A")
+                "N/A".to_string()
             } else {
                 format!(
                     "{} ms",
@@ -136,10 +136,10 @@ impl UpdateToView for PeersDashboardData {
             for item in self.peers.iter() {
                 s.insert_item(item.clone());
             }
-            if let Some(row) = selected_row {
-                if row < self.peers.len() {
-                    s.set_selected_row(row);
-                }
+            if let Some(row) = selected_row
+                && row < self.peers.len()
+            {
+                s.set_selected_row(row);
             }
         });
     }
@@ -180,8 +180,7 @@ impl DashboardData for PeersDashboardData {
                     },
                     block_height: peer
                         .sync_state
-                        .map(|x| x.best_known_header_number)
-                        .flatten()
+                        .and_then(|x| x.best_known_header_number)
                         .map(|x| x.value()),
                     latency: 123,
                     warning: None,
@@ -191,10 +190,8 @@ impl DashboardData for PeersDashboardData {
         log::debug!("Updated: PeersDashboardData");
         Ok(Box::new(self.clone()))
     }
-    
-    fn set_enable_overview_data(&mut self, _flag: bool) {
-        
-    }
+
+    fn set_enable_overview_data(&mut self, _flag: bool) {}
 }
 
 pub fn peers_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {

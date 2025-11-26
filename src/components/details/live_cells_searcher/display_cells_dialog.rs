@@ -10,21 +10,26 @@ use ckb_sdk::{
 use cursive::{
     CbSink, Cursive, View,
     view::{IntoBoxedView, Nameable, Resizable},
-    views::{Dialog, LinearLayout, ListView, OnLayoutView, TextView},
+    views::{Button, Dialog, LinearLayout, ListView, OnLayoutView, TextView},
 };
+use cursive_aligned_view::Alignable;
 use cursive_async_view::{AsyncState, AsyncView};
 use cursive_table_view::{TableView, TableViewItem};
 use log::info;
 
 use crate::{
-    components::details::live_cells_searcher::display_cells_dialog::names::CELLS_TABLE,
-    declare_names, utils::shorten_hex,
+    components::details::live_cells_searcher::display_cells_dialog::names::{
+        CELLS_TABLE, PAGE_LABEL,
+    },
+    declare_names,
+    utils::shorten_hex,
 };
 
 declare_names!(
     names,
     "live_cells_searcher_display_cells_dialog_",
-    CELLS_TABLE
+    CELLS_TABLE,
+    PAGE_LABEL
 );
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -99,6 +104,45 @@ impl CellsData {
             client,
         }
     }
+    pub fn switch_to_prev_page(data: Arc<Mutex<Self>>, siv: &mut Cursive) {
+        let mut guard = data.lock().unwrap();
+
+        if guard.current_page == 0 {
+            siv.add_layer(
+                Dialog::around(TextView::new("This is the first page")).button("Close", |siv| {
+                    siv.pop_layer();
+                }),
+            );
+            return;
+        }
+        guard.current_page -= 1;
+        guard.update_data_to_view(siv.cb_sink().clone());
+    }
+    pub fn switch_to_next_page(data: Arc<Mutex<Self>>, siv: &mut Cursive) {
+        info!("Switching to next page..");
+        let mut guard = data.lock().unwrap();
+        if guard.current_page + 1 == guard.data.len() {
+            if guard
+                .get_display_data()
+                .map(|x| x.is_empty())
+                .unwrap_or_default()
+            {
+                siv.add_layer(Dialog::around(TextView::new("No more data")).button(
+                    "Close",
+                    |siv| {
+                        siv.pop_layer();
+                    },
+                ));
+                return;
+            }
+            drop(guard);
+            info!("Fetching with new thread..");
+            Self::fetch_next_data_with_thread(data, Some(siv.cb_sink().clone()));
+        } else {
+            guard.current_page += 1;
+            guard.update_data_to_view(siv.cb_sink().clone());
+        }
+    }
     pub fn get_display_data(&self) -> Option<&Vec<Cell>> {
         self.data.get(self.current_page).map(|x| &x.objects)
     }
@@ -106,15 +150,19 @@ impl CellsData {
         if let Some(data) = self.get_display_data() {
             info!("Updating to view..");
             let data = data.clone();
+            let page = self.current_page;
             cb_sink
                 .send(Box::new(move |siv| {
                     siv.call_on_name(
                         CELLS_TABLE,
                         |view: &mut TableView<CellWrapper, CellsDisplayColumns>| {
                             info!("Setting items..");
-                            view.set_items(data.into_iter().map(|x| CellWrapper(x)).collect());
+                            view.set_items(data.into_iter().map(CellWrapper).collect());
                         },
                     );
+                    siv.call_on_name(PAGE_LABEL, |view: &mut TextView| {
+                        view.set_content(format!("Page {}", page + 1));
+                    });
                 }))
                 .unwrap();
         }
@@ -130,8 +178,8 @@ impl CellsData {
             info!("Search keyword: {:?}", guard.search_key);
             match guard.client.get_cells(
                 guard.search_key.clone(),
-                ckb_sdk::rpc::ckb_indexer::Order::Asc,
-                (10u32).into(),
+                ckb_sdk::rpc::ckb_indexer::Order::Desc,
+                (18u32).into(),
                 guard.data.last().map(|x| x.last_cursor.clone()),
             ) {
                 Ok(o) => {
@@ -141,10 +189,10 @@ impl CellsData {
                     if let Some(cb_sink) = update_after_fetching {
                         guard.update_data_to_view(cb_sink);
                     }
-                    tx.send(Ok(())).unwrap();
+                    tx.send(Ok(())).ok();
                 }
                 Err(e) => {
-                    tx.send(Err(e.into())).unwrap();
+                    tx.send(Err(e.into())).ok();
                 }
             }
         });
@@ -219,45 +267,64 @@ pub fn display_cells_dialog(
     let initialized = Arc::new(AtomicBool::new(false));
     let initialized_cloned = initialized.clone();
     let data_cloned = data.clone();
+    let data_cloned_2 = data.clone();
+    let data_cloned_3 = data.clone();
 
     OnLayoutView::new(
         Dialog::new()
             .title("Live Cells")
             .content(
-                LinearLayout::vertical().child(
-                    TableView::<CellWrapper, CellsDisplayColumns>::new()
-                        .column(CellsDisplayColumns::BlockNumber, "Block Number", |c| {
-                            c.width(15)
-                        })
-                        .column(CellsDisplayColumns::TxIndex, "Transaction Index", |c| {
-                            c.width(20)
-                        })
-                        .column(CellsDisplayColumns::Capacity, "Capacity (CKB)", |c| {
-                            c.width(20)
-                        })
-                        .column(
-                            CellsDisplayColumns::OutPointTxHash,
-                            "OutPoint Tx Hash",
-                            |c| c.width(20),
-                        )
-                        .column(CellsDisplayColumns::OutPointIndex, "OutPoint Index", |c| {
-                            c.width(20)
-                        })
-                        .on_submit(|siv, _, data_index| {
-                            let data = siv
-                                .call_on_name(
-                                    CELLS_TABLE,
-                                    |view: &mut TableView<CellWrapper, CellsDisplayColumns>| {
-                                        view.borrow_items()[data_index].clone()
-                                    },
-                                )
-                                .unwrap();
-                            siv.add_layer(cell_detail_dialog(&data.0));
-                        })
-                        .with_name(CELLS_TABLE)
-                        .min_width(110)
-                        .min_height(10),
-                ),
+                LinearLayout::vertical()
+                    .child(
+                        TableView::<CellWrapper, CellsDisplayColumns>::new()
+                            .column(CellsDisplayColumns::BlockNumber, "Block Number", |c| {
+                                c.width(15)
+                            })
+                            .column(CellsDisplayColumns::TxIndex, "Transaction Index", |c| {
+                                c.width(20)
+                            })
+                            .column(CellsDisplayColumns::Capacity, "Capacity (CKB)", |c| {
+                                c.width(20)
+                            })
+                            .column(
+                                CellsDisplayColumns::OutPointTxHash,
+                                "OutPoint Tx Hash",
+                                |c| c.width(20),
+                            )
+                            .column(CellsDisplayColumns::OutPointIndex, "OutPoint Index", |c| {
+                                c.width(20)
+                            })
+                            .on_submit(|siv, _, data_index| {
+                                let data = siv
+                                    .call_on_name(
+                                        CELLS_TABLE,
+                                        |view: &mut TableView<CellWrapper, CellsDisplayColumns>| {
+                                            view.borrow_items()[data_index].clone()
+                                        },
+                                    )
+                                    .unwrap();
+                                siv.add_layer(cell_detail_dialog(&data.0));
+                            })
+                            .with_name(CELLS_TABLE)
+                            .min_width(110)
+                            .min_height(20),
+                    )
+                    .child(
+                        LinearLayout::horizontal()
+                            .child(Button::new("Prev", move |siv| {
+                                CellsData::switch_to_prev_page(data_cloned_2.clone(), siv);
+                            }))
+                            .child(
+                                TextView::new("Page 1")
+                                    .center()
+                                    .with_name(PAGE_LABEL)
+                                    .min_width(40),
+                            )
+                            .child(Button::new("Next", move |siv| {
+                                CellsData::switch_to_next_page(data_cloned_3.clone(), siv);
+                            }))
+                            .align_center(),
+                    ),
             )
             .button("Close", |siv| {
                 siv.pop_layer();

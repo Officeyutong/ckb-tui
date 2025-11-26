@@ -12,7 +12,7 @@ use crate::{
     },
     declare_names,
 };
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use ckb_fixed_hash_core::H256;
 use ckb_gen_types::core::ScriptHashType;
 use ckb_sdk::CkbRpcClient;

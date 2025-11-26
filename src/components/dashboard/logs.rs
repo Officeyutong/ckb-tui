@@ -116,11 +116,8 @@ impl DashboardState for LogsDashboardState {
         Ok(())
     }
     fn accept_event(&mut self, event: &TUIEvent) {
-        match event {
-            TUIEvent::FilterLogEvent(filter_log_option) => {
-                self.filter_option = filter_log_option.clone()
-            }
-            _ => {}
+        if let TUIEvent::FilterLogEvent(filter_log_option) = event {
+            self.filter_option = filter_log_option.clone()
         }
     }
 }
