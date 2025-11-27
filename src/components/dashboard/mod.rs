@@ -116,7 +116,9 @@ pub fn dashboard(
             .child(
                 LinearLayout::horizontal()
                     .child(TextView::new(" "))
-                    .child(SpinnerView::new(cursive.cb_sink().clone()).with_name(REFRESHING_SPINNER))
+                    .child(
+                        SpinnerView::new(cursive.cb_sink().clone()).with_name(REFRESHING_SPINNER),
+                    )
                     .align_center(),
             )
             .child(
@@ -130,7 +132,7 @@ pub fn dashboard(
             )
             .child(basic_info_dashboard(event_sender.clone()))
             .child(Panel::new(TextView::new(
-                "Press [Q] to quit, [Tab] to switch panels, [R] to refresh",
+                "Press [Q] to quit, [Tab] to switch panels, [R] to refresh, [M] for menu",
             )))
             .with_name(MAIN_LAYOUT),
     )

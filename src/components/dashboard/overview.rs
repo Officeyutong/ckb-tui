@@ -11,16 +11,22 @@ use cursive::{
 };
 
 use crate::{
+    CURRENT_TAB,
     components::{
+        DashboardData, DashboardState, UpdateToView,
         dashboard::{
+            TUIEvent,
             overview::names::{
                 AVERAGE_BLOCK_TIME, AVERAGE_FEE_RATE, AVERAGE_LATENCY, COMMITTING_TX,
                 CONNECTED_PEERS, CPU, CPU_HISTORY, CURRENT_BLOCK, DIFFICULTY, DISK_SPEED,
                 DISK_USAGE, EPOCH, ESTIMATED_EPOCH_TIME, ESTIMATED_TIME_LEFT, HASH_RATE, NETWORK,
                 PENDING_TX, PROPOSED_TX, RAM, REJECTED_TX, SYNCING_PROGRESS, TOTAL_POOL_SIZE,
-            }, TUIEvent
-        }, extract_epoch, get_average_block_time_and_estimated_epoch_time, DashboardData, DashboardState, UpdateToView
-    }, declare_names, update_text, utils::{bar_chart::SimpleBarChart, difficulty_to_string, hash_rate_to_string}, CURRENT_TAB
+            },
+        },
+        extract_epoch, get_average_block_time_and_estimated_epoch_time,
+    },
+    declare_names, update_text,
+    utils::{bar_chart::SimpleBarChart, difficulty_to_string, hash_rate_to_string},
 };
 
 declare_names!(
@@ -100,7 +106,7 @@ impl OverviewDashboardState {
     fn get_total_send_and_receive_bytes_for_network_devices(overview: &Overview) -> (u64, u64) {
         let networks = &overview.sys.global.networks;
         let (send, received) = networks
-            .into_iter()
+            .iter()
             .map(|x| (x.total_transmitted, x.total_received))
             .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
 
@@ -286,11 +292,15 @@ impl UpdateToView for OverviewDashboardState {
                     (data.disk_used as f64 / data.disk_total as f64 * 100.0)
                 )
             );
-            update_text!(siv, names::DIFFICULTY, difficulty_to_string(data.difficulty));
+            update_text!(
+                siv,
+                names::DIFFICULTY,
+                difficulty_to_string(data.difficulty)
+            );
             update_text!(siv, names::HASH_RATE, hash_rate_to_string(data.hash_rate));
         } else {
             siv.call_on_name(CPU_HISTORY, |view: &mut SimpleBarChart| {
-                view.set_data(&vec![]).unwrap();
+                view.set_data(&[]).unwrap();
             });
             update_text!(siv, DISK_SPEED, "N/A");
             update_text!(siv, NETWORK, "N/A");
@@ -392,7 +402,7 @@ impl UpdateToView for OverviewDashboardData {
             siv,
             names::AVERAGE_FEE_RATE,
             match self.average_fee_rate {
-                None => format!("N/A"),
+                None => "N/A".to_string(),
                 Some(v) => format!("{} shannons/KB", v),
             }
         );

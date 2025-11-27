@@ -366,7 +366,7 @@ impl UpdateToView for MempoolDashboardData {
             siv,
             AVG_FEE_RATE,
             match self.avg_fee_rate {
-                None => format!("N/A"),
+                None => "N/A".to_string(),
                 Some(v) => format!("{} shannons/KB", v),
             }
         );

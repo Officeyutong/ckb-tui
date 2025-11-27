@@ -30,6 +30,7 @@ use crate::components::{
         peers::PeersDashboardData,
         set_loading,
     },
+    details::menu::details_menu,
 };
 
 pub static CURRENT_TAB: AtomicUsize = AtomicUsize::new(0);
@@ -71,6 +72,10 @@ fn main() -> anyhow::Result<()> {
     }
     siv.add_global_callback('q', |s| s.quit());
     siv.add_global_callback('~', cursive::Cursive::toggle_debug_console);
+    let client_cloned = client.clone();
+    siv.add_global_callback('m', move |s| {
+        s.add_layer(details_menu(&client_cloned));
+    });
     let loading_variable = Arc::new(AtomicBool::new(false));
     if let Err(e) = client.local_node_info() {
         bail!(
@@ -78,10 +83,7 @@ fn main() -> anyhow::Result<()> {
             e
         );
     }
-    let enable_fetch_overview = match client.post::<(), Overview>("get_overview", ()) {
-        Ok(_) => true,
-        Err(_) => false,
-    };
+    let enable_fetch_overview = client.post::<(), Overview>("get_overview", ()).is_ok();
     let sync_request_tx = {
         let (tx, rx) = std::sync::mpsc::channel::<SyncRequest>();
         let cb_sink = siv.cb_sink().clone();
@@ -94,11 +96,8 @@ fn main() -> anyhow::Result<()> {
                 let result = general_data.fetch_data_through_client(&client);
                 cb_sink
                     .send(Box::new(move |siv| {
-                        match result {
-                            Ok(result) => {
-                                result.update_to_view(siv);
-                            }
-                            Err(_) => {}
+                        if let Ok(result) = result {
+                            result.update_to_view(siv);
                         };
                     }))
                     .unwrap();
@@ -214,7 +213,7 @@ fn main() -> anyhow::Result<()> {
                     // But only update state per 300 millisecond
                     tick_count = 0;
                 }
-                log::info!("Updating state..");
+                log::debug!("Updating state..");
                 cb_sink
                     .send(Box::new(|siv| set_loading(siv, true)))
                     .unwrap();

@@ -8,7 +8,7 @@ use cursive::Cursive;
 use crate::components::dashboard::TUIEvent;
 
 pub mod dashboard;
-
+pub mod details;
 pub trait UpdateToView {
     fn update_to_view(&self, siv: &mut Cursive);
 }
