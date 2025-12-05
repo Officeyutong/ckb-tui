@@ -10,6 +10,7 @@ use cursive::{
 };
 use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
+use thousands::Separable;
 
 use crate::{
     CURRENT_TAB,
@@ -70,7 +71,11 @@ pub struct BlockchainDashboardState {
 impl UpdateToView for BlockchainDashboardState {
     fn update_to_view(&self, siv: &mut cursive::Cursive) {
         if let Some(data) = &self.overview_data {
-            update_text!(siv, LIVE_CELLS, format!("{}", data.live_cells));
+            update_text!(
+                siv,
+                LIVE_CELLS,
+                format!("{}", data.live_cells.separate_with_commas())
+            );
             siv.call_on_name(LIVE_CELLS_HISTORY, |view: &mut SimpleBarChart| {
                 view.set_max_value(data.max_live_cells as f64);
                 view.set_diff_value(Some(data.min_live_cells as f64 * 0.9));
@@ -79,7 +84,7 @@ impl UpdateToView for BlockchainDashboardState {
             update_text!(
                 siv,
                 OCCUPIED_CAPACITY,
-                format!("{} CKB ", data.occupied_capacity)
+                format!("{} CKB ", data.occupied_capacity.separate_with_commas())
             );
             siv.call_on_name(OCCUPIED_CAPACITY_HISTORY, |view: &mut SimpleBarChart| {
                 view.set_max_value(data.max_occupied_capacity as f64);
@@ -544,7 +549,7 @@ fn consensus_modal(data: &Consensus) -> impl IntoBoxedView + use<> {
             .child(
                 LinearLayout::horizontal()
                     .child(TextView::new("• Max block cycles:").min_width(40))
-                    .child(TextView::new(format!("{}", data.max_block_cycles))),
+                    .child(TextView::new(format!("{}", data.max_block_cycles.value()))),
             )
             .child(
                 LinearLayout::horizontal()
