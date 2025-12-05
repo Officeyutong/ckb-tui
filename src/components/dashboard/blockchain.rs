@@ -1,16 +1,19 @@
-use std::sync::mpsc;
+use std::sync::{Arc, RwLock, mpsc};
 
 use anyhow::{Context, anyhow};
-use ckb_jsonrpc_types::Consensus;
+use chrono::{DateTime, Local, TimeZone, Utc};
+use ckb_fixed_hash_core::H256;
+use ckb_jsonrpc_types::{BlockView, Consensus};
 use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
-    views::{Button, Dialog, LinearLayout, NamedView, Panel, TextView},
+    views::{Button, Dialog, LinearLayout, ListView, NamedView, Panel, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
 use thousands::Separable;
+use tokio_stream::StreamExt;
 
 use crate::{
     CURRENT_TAB,
@@ -19,15 +22,18 @@ use crate::{
         dashboard::{
             TUIEvent,
             blockchain::names::{
-                ALGORITHM, AVERAGE_BLOCK_TIME, BLOCK_HEIGHT, DIFFICULTY, EPOCH,
-                ESTIMATED_EPOCH_TIME, HASH_RATE, LIVE_CELLS, LIVE_CELLS_HISTORY, OCCUPIED_CAPACITY,
-                OCCUPIED_CAPACITY_HISTORY, SCRIPT_TABLE,
+                ALGORITHM, AVERAGE_BLOCK_TIME, BLOCK_HEIGHT, BLOCKS_SUBSCRIPTION_WARNING,
+                BLOCKS_TABLE, DIFFICULTY, EPOCH, ESTIMATED_EPOCH_TIME, HASH_RATE, LIVE_CELLS,
+                LIVE_CELLS_HISTORY, OCCUPIED_CAPACITY, OCCUPIED_CAPACITY_HISTORY, SCRIPT_TABLE,
             },
         },
         extract_epoch, get_average_block_time_and_estimated_epoch_time,
     },
     declare_names, update_text,
-    utils::{bar_chart::SimpleBarChart, difficulty_to_string, hash_rate_to_string, shorten_hex},
+    utils::{
+        bar_chart::SimpleBarChart, create_subscription_client, difficulty_to_string,
+        hash_rate_to_string, shorten_hex,
+    },
 };
 
 const TEST_DATA: [f64; 10] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
@@ -46,7 +52,9 @@ declare_names!(
     LIVE_CELLS_HISTORY,
     OCCUPIED_CAPACITY,
     OCCUPIED_CAPACITY_HISTORY,
-    SCRIPT_TABLE
+    SCRIPT_TABLE,
+    BLOCKS_SUBSCRIPTION_WARNING,
+    BLOCKS_TABLE
 );
 
 #[derive(Clone, Default)]
@@ -60,12 +68,76 @@ pub struct GetOverviewOfBlockchainDasboardState {
     min_occupied_capacity: u64,
     occupied_capacity: u64,
 }
+#[derive(Clone)]
+struct BlockListItem {
+    time: DateTime<Local>,
+    block_number: u64,
+    block_hash: H256,
+}
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub enum BlockListColumn {
+    Time,
+    BlockNumber,
+    BlockHash,
+}
+
+impl TableViewItem<BlockListColumn> for BlockListItem {
+    fn to_column(&self, column: BlockListColumn) -> String {
+        match column {
+            BlockListColumn::Time => format!(
+                "{}s ago",
+                chrono::Local::now().timestamp() - self.time.timestamp()
+            ),
+            BlockListColumn::BlockNumber => self.block_number.to_string(),
+            BlockListColumn::BlockHash => shorten_hex(self.block_hash.to_string(), 5, 5),
+        }
+    }
+
+    fn cmp(&self, other: &Self, column: BlockListColumn) -> std::cmp::Ordering
+    where
+        Self: Sized,
+    {
+        match column {
+            BlockListColumn::Time => self.time.cmp(&other.time).reverse(),
+            BlockListColumn::BlockNumber => self.block_number.cmp(&other.block_number),
+            BlockListColumn::BlockHash => self.block_hash.cmp(&other.block_hash),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct BlockchainDashboardState {
     client: CkbRpcClient,
     consensus: Option<Consensus>,
     overview_data: Option<GetOverviewOfBlockchainDasboardState>,
+    subscription: BlockChainDashboardSubscriptionState,
+}
+#[derive(Clone)]
+pub struct BlockChainDashboardWithTcpConnState {
+    blocks: Arc<RwLock<Queue<BlockListItem>>>,
+    stop_tx: tokio::sync::mpsc::Sender<()>,
+}
+fn update_blocks(state: &BlockChainDashboardWithTcpConnState, block_view: BlockView) {
+    let mut guard = state.blocks.write().unwrap();
+    guard
+        .queue(BlockListItem {
+            time: Utc
+                .timestamp_millis_opt(block_view.header.inner.timestamp.value() as i64)
+                .unwrap()
+                .into(),
+            block_number: block_view.header.inner.number.value(),
+            block_hash: block_view.header.hash,
+        })
+        .unwrap();
+    if guard.len() > 10 {
+        guard.dequeue();
+    }
+}
+
+#[derive(Clone)]
+pub enum BlockChainDashboardSubscriptionState {
+    WithTcpConn(BlockChainDashboardWithTcpConnState),
+    WithoutTcpConn,
 }
 
 impl UpdateToView for BlockchainDashboardState {
@@ -99,6 +171,18 @@ impl UpdateToView for BlockchainDashboardState {
             update_text!(siv, OCCUPIED_CAPACITY, format!("N/A"));
             siv.call_on_name(OCCUPIED_CAPACITY_HISTORY, |view: &mut SimpleBarChart| {
                 view.set_data(&[]).unwrap();
+            });
+        }
+        if let BlockChainDashboardSubscriptionState::WithTcpConn(conn_data) = &self.subscription {
+            siv.call_on_name(
+                BLOCKS_TABLE,
+                |view: &mut TableView<BlockListItem, BlockListColumn>| {
+                    view.set_items(conn_data.blocks.read().unwrap().vec().clone());
+                },
+            );
+        } else {
+            siv.call_on_name(BLOCKS_SUBSCRIPTION_WARNING, |view:&mut TextView|{
+                view.set_content( "Subscribe TCP address is not set, latest transactions and rejected transactions won't be updated");
             });
         }
     }
@@ -154,7 +238,78 @@ impl DashboardState for BlockchainDashboardState {
 }
 
 impl BlockchainDashboardState {
-    pub fn new(client: CkbRpcClient, fetch_overview_data: bool) -> Self {
+    #[allow(unused)]
+    pub fn stop(&self) {
+        match &self.subscription {
+            BlockChainDashboardSubscriptionState::WithTcpConn(
+                block_chain_dashboard_with_tcp_conn_state,
+            ) => block_chain_dashboard_with_tcp_conn_state
+                .stop_tx
+                .blocking_send(())
+                .unwrap(),
+            BlockChainDashboardSubscriptionState::WithoutTcpConn => {}
+        };
+    }
+    pub fn new(
+        client: CkbRpcClient,
+        fetch_overview_data: bool,
+        subscription_url: Option<String>,
+    ) -> Self {
+        let subscription = if let Some(url) = subscription_url {
+            let (stop_tx, mut stop_rx) = tokio::sync::mpsc::channel(1);
+            let result = BlockChainDashboardSubscriptionState::WithTcpConn(
+                BlockChainDashboardWithTcpConnState {
+                    blocks: Arc::new(RwLock::new(Queue::new())),
+                    stop_tx,
+                },
+            );
+            let self_cloned = result.clone();
+            std::thread::spawn(move || {
+                log::info!("Subscription thread of blockchain started");
+                let result = match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(o) => o,
+                    Err(e) => {
+                        log::error!("{:?}", e);
+                        panic!("Unable to start tokio runtime");
+                    }
+                }
+                .block_on(async move {
+                    let mut block_sub = create_subscription_client(&url)
+                        .await
+                        .with_context(|| anyhow!("Unable to connect to:{}", url))?
+                        .subscribe::<BlockView>("new_tip_block")
+                        .await
+                        .with_context(|| anyhow!("Unable to subscribe new blocks"))?;
+                    loop {
+                        tokio::select! {
+                            _ = stop_rx.recv() => {
+                                log::trace!("Exiting tx subscribing thread");
+                                break;
+                            }
+                            Some(Ok(r)) = block_sub.next() => {
+                                log::trace!("Received block sub: {:?}", r);
+                                update_blocks(match self_cloned {
+                                    BlockChainDashboardSubscriptionState::WithTcpConn(ref  block_chain_dashboard_with_tcp_conn_state) => block_chain_dashboard_with_tcp_conn_state,
+                                    BlockChainDashboardSubscriptionState::WithoutTcpConn => unreachable!(),
+                                }, r.1);
+                            }
+                        }
+                    }
+                    anyhow::Ok(())
+                });
+                log::info!(
+                    "Tokio runtime of blockchain subscription exited: {:?}",
+                    result
+                );
+            });
+            result
+        } else {
+            BlockChainDashboardSubscriptionState::WithoutTcpConn
+        };
+
         Self {
             client,
             consensus: None,
@@ -163,6 +318,7 @@ impl BlockchainDashboardState {
             } else {
                 None
             },
+            subscription,
         }
     }
 }
@@ -484,11 +640,36 @@ pub fn blockchain_dashboard(event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBo
                                 siv.add_layer(script_detail_modal(&line));
                             })
                             .with_name(SCRIPT_TABLE)
-                            .min_size((100, 20)),
+                            .min_size((100, 7)),
                     ),
             )
             .scrollable(),
         )
+        .child(Panel::new(
+            LinearLayout::vertical()
+                .child(TextView::new("[Latest Blocks]"))
+                .child(TextView::new(" ").with_name(BLOCKS_SUBSCRIPTION_WARNING))
+                .child(
+                    TableView::<BlockListItem, BlockListColumn>::new()
+                        .column(BlockListColumn::Time, "Time", |c| c)
+                        .column(BlockListColumn::BlockNumber, "Block Number", |c| c)
+                        .column(BlockListColumn::BlockHash, "Block Hash", |c| c)
+                        .on_submit(|siv, _row, index| {
+                            let line = siv
+                                .call_on_name(
+                                    BLOCKS_TABLE,
+                                    |view: &mut TableView<BlockListItem, BlockListColumn>| {
+                                        view.borrow_item(index).unwrap().clone()
+                                    },
+                                )
+                                .unwrap();
+                            siv.add_layer(block_modal(&line));
+                        })
+                        .with_name(BLOCKS_TABLE)
+                        .min_size((100, 8)),
+                )
+                .scrollable(),
+        ))
 }
 
 fn script_detail_modal(data: &ScriptItem) -> impl IntoBoxedView + use<> {
@@ -582,6 +763,19 @@ fn consensus_modal(data: &Consensus) -> impl IntoBoxedView + use<> {
             ),
     )
     .title("Consensus")
+    .button("Close", |siv| {
+        siv.pop_layer();
+    })
+}
+
+fn block_modal(data: &BlockListItem) -> impl IntoBoxedView {
+    Dialog::around(
+        ListView::new()
+            .child("Block Hash", TextView::new(data.block_hash.to_string()))
+            .child("Block Number", TextView::new(data.block_number.to_string()))
+            .child("Time", TextView::new(data.time.to_rfc2822())),
+    )
+    .title("Details of block")
     .button("Close", |siv| {
         siv.pop_layer();
     })

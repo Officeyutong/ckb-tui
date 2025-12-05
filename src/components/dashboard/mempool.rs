@@ -20,7 +20,6 @@ use cursive::{
 use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
 use std::sync::mpsc;
-use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 
 use crate::components::DashboardState;
@@ -28,6 +27,7 @@ use crate::components::dashboard::TUIEvent;
 use crate::components::dashboard::mempool::names::SUBSCRIBE_WARNING;
 use crate::components::get_average_block_time_and_estimated_epoch_time;
 use crate::components::map_pool_transaction_to_reason;
+use crate::utils::create_subscription_client;
 use crate::utils::shorten_hex;
 use crate::{
     CURRENT_TAB,
@@ -74,12 +74,6 @@ pub enum MempoolDashboardState {
     WithoutTcpConn,
 }
 
-async fn create_client(addr: &str) -> anyhow::Result<ckb_sdk::pubsub::Client<TcpStream>> {
-    log::debug!("Connecting TCP: {}", addr);
-    Ok(ckb_sdk::pubsub::Client::new(
-        TcpStream::connect(addr).await?,
-    ))
-}
 
 fn update_latest_tx(state: &MempoolDashboatdInnerState, tx: PoolTransactionEntry) {
     let mut guard = state.latest_incoming_txs.write().unwrap();
@@ -155,13 +149,13 @@ impl MempoolDashboardState {
                     }
                 }
                 .block_on(async move {
-                    let mut new_tx_sub = create_client(&tcp_addr)
+                    let mut new_tx_sub = create_subscription_client(&tcp_addr)
                         .await
                         .with_context(|| anyhow!("Unable to connect to: {}", tcp_addr))?
                         .subscribe::<PoolTransactionEntry>("new_transaction")
                         .await
                         .with_context(|| anyhow!("Unable to subscribe new_transaction"))?;
-                    let mut new_rejection_sub = create_client(&tcp_addr)
+                    let mut new_rejection_sub = create_subscription_client(&tcp_addr)
                         .await
                         .with_context(|| anyhow!("Unable to connect to: {}", tcp_addr))?
                         .subscribe::<(PoolTransactionEntry, PoolTransactionReject)>(

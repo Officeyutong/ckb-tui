@@ -1,4 +1,5 @@
 use number_prefix::NumberPrefix;
+use tokio::net::TcpStream;
 
 pub mod bar_chart;
 
@@ -48,4 +49,13 @@ pub fn difficulty_to_string(difficulty: f64) -> String {
         NumberPrefix::Standalone(s) => format!("{} H", s),
         NumberPrefix::Prefixed(prefix, n) => format!("{:.2} {}H", n, prefix),
     }
+}
+
+pub async fn create_subscription_client(
+    addr: &str,
+) -> anyhow::Result<ckb_sdk::pubsub::Client<TcpStream>> {
+    log::debug!("Connecting TCP: {}", addr);
+    Ok(ckb_sdk::pubsub::Client::new(
+        TcpStream::connect(addr).await?,
+    ))
 }

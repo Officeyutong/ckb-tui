@@ -192,8 +192,11 @@ fn main() -> anyhow::Result<()> {
         std::thread::spawn(move || {
             let mut overview_state =
                 OverviewDashboardState::new(client.clone(), enable_fetch_overview).unwrap();
-            let mut blockchain_state =
-                BlockchainDashboardState::new(client.clone(), enable_fetch_overview);
+            let mut blockchain_state = BlockchainDashboardState::new(
+                client.clone(),
+                enable_fetch_overview,
+                args.tcp_url.clone(),
+            );
             let mut mempool_state = MempoolDashboardState::new(args.tcp_url.clone());
             let mut logs_state = LogsDashboardState::new();
             let mut tick_count = 0;
