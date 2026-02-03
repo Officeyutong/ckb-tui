@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex, mpsc};
 
 use anyhow::{Context, anyhow};
-use chrono::Local;
+use chrono::{DateTime, Local};
 use cursive::{
     reexports::ahash::HashMap,
     view::{IntoBoxedView, Nameable, Resizable, Scrollable},
-    views::{LinearLayout, Panel, RadioGroup, TextView},
+    views::{Dialog, LinearLayout, ListView, Panel, RadioGroup, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
 use queue::Queue;
@@ -37,7 +37,7 @@ declare_names!(
     SESSION_OVERVIEW_TRACE,
     LOGS_TABLE
 );
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogCategory {
     Trace,
@@ -129,9 +129,37 @@ fn update_log(data: &LogsDashboardInnerState, logs_entry: CkbLogEntry) {
             vacant_entry.insert(1);
         }
     };
+    let mut logs_guard = data.logs.lock().unwrap();
+
+    logs_guard
+        .queue(LogsItem {
+            time: DateTime::parse_from_str(&logs_entry.date, "%Y-%m-%d %H:%M:%S%.3f %:z")
+                .unwrap()
+                .with_timezone(&Local),
+            category: logs_entry.level.clone(),
+            source: logs_entry.target,
+            message: logs_entry.message,
+        })
+        .unwrap();
+    if logs_guard.len() > 1000 {
+        logs_guard.dequeue();
+    }
 }
 
 impl LogsDashboardState {
+    #[allow(unused)]
+    pub fn stop(&self) {
+        match self {
+            LogsDashboardState::WithTcpConn(logs_dashboard_inner_state) => {
+                logs_dashboard_inner_state
+                    .stop_tx
+                    .blocking_send(())
+                    .unwrap();
+            }
+            LogsDashboardState::WithoutTcpConn => {}
+        }
+    }
+
     pub fn new(subscribe_addr: Option<String>) -> Self {
         if let Some(addr) = subscribe_addr {
             let (stop_tx, mut stop_rx) = tokio::sync::mpsc::channel(1);
@@ -159,7 +187,7 @@ impl LogsDashboardState {
                     let mut logs_sub = create_subscription_client(&tcp_addr)
                         .await
                         .with_context(|| anyhow!("Unable to connect to: {}", tcp_addr))?
-                        .subscribe::<CkbLogEntry>("logs")
+                        .subscribe::<CkbLogEntry>("log")
                         .await
                         .with_context(|| anyhow!("Unable to subscribe logs"))?;
 
@@ -375,10 +403,35 @@ pub fn logs_dashboard(event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedVie
                         .column(LogsColumn::Category, "Category", |c| c.width(7))
                         .column(LogsColumn::Source, "Source", |c| c.width(15))
                         .column(LogsColumn::Message, "Message", |c| c.width(40))
+                        .on_submit(|siv, _row, index| {
+                            let line = siv
+                                .call_on_name(
+                                    LOGS_TABLE,
+                                    |view: &mut TableView<LogsItem, LogsColumn>| {
+                                        view.borrow_item(index).unwrap().clone()
+                                    },
+                                )
+                                .unwrap();
+                            siv.add_layer(log_entry_modal(&line));
+                        })
                         .with_name(LOGS_TABLE)
                         .min_width(100)
                         .min_height(30)
                         .scrollable(),
                 ),
         ))
+}
+
+fn log_entry_modal(data: &LogsItem) -> impl IntoBoxedView {
+    Dialog::around(
+        ListView::new()
+            .child("Time", TextView::new(data.time.to_rfc2822()))
+            .child("Log Level", TextView::new(format!("{:?}", data.category)))
+            .child("Log Source", TextView::new(&data.source))
+            .child("Log", TextView::new(&data.message)),
+    )
+    .title("Details of log")
+    .button("Close", |siv| {
+        siv.pop_layer();
+    })
 }
