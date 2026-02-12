@@ -198,7 +198,7 @@ fn main() -> anyhow::Result<()> {
                 args.tcp_url.clone(),
             );
             let mut mempool_state = MempoolDashboardState::new(args.tcp_url.clone());
-            let mut logs_state = LogsDashboardState::new();
+            let mut logs_state = LogsDashboardState::new(args.tcp_url.clone());
             let mut tick_count = 0;
             loop {
                 // Accept events per millisesond
