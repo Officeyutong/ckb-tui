@@ -177,7 +177,14 @@ impl UpdateToView for BlockchainDashboardState {
             siv.call_on_name(
                 BLOCKS_TABLE,
                 |view: &mut TableView<BlockListItem, BlockListColumn>| {
-                    view.set_items(conn_data.blocks.read().unwrap().vec().clone());
+                    let index = view.row();
+                    view.clear();
+                    for item in conn_data.blocks.read().unwrap().vec().iter() {
+                        view.insert_item(item.clone());
+                    }
+                    if let Some(index) = index {
+                        view.set_selected_row(index);
+                    }
                 },
             );
         } else {

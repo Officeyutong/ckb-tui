@@ -1,6 +1,7 @@
 use std::sync::mpsc;
 
 use anyhow::{Context, anyhow};
+use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     theme::{BaseColor, ColorStyle},
@@ -40,7 +41,7 @@ struct PeersItem {
     peer_id: String,
     direction: PeerDirection,
     block_height: Option<u64>,
-    latency: u64,
+    latency: Option<u64>,
     warning: Option<String>,
 }
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -64,7 +65,10 @@ impl TableViewItem<PeersColumn> for PeersItem {
                 None => String::from("-"),
                 Some(v) => format!("{}", v),
             },
-            PeersColumn::Latency => format!("{}ms", self.latency),
+            PeersColumn::Latency => match self.latency {
+                Some(x) => format!("{} ms", x),
+                None => String::from("N/A"),
+            },
             PeersColumn::Warning => match self.warning.clone() {
                 None => String::from("-"),
                 Some(v) => v,
@@ -90,6 +94,8 @@ pub struct PeersDashboardData {
     connections_in: usize,
     connections_out: usize,
     peers: Vec<PeersItem>,
+
+    enable_fetch_overview_data: bool,
 }
 
 impl UpdateToView for PeersDashboardData {
@@ -124,10 +130,19 @@ impl UpdateToView for PeersDashboardData {
             if self.peers.is_empty() {
                 "N/A".to_string()
             } else {
-                format!(
-                    "{} ms",
-                    self.peers.iter().map(|x| x.latency).sum::<u64>() / self.peers.len() as u64
-                )
+                let mut sum = 0;
+                let mut count = 0;
+                for item in self.peers.iter() {
+                    if let Some(lat) = item.latency {
+                        sum += lat;
+                        count += 1;
+                    }
+                }
+                if count == 0 {
+                    format!("N/A")
+                } else {
+                    format!("{} ms", sum / count)
+                }
             }
         );
         siv.call_on_name(PEERS_TABLE, |s: &mut TableView<PeersItem, PeersColumn>| {
@@ -154,12 +169,25 @@ impl DashboardData for PeersDashboardData {
         client: &CkbRpcClient,
     ) -> anyhow::Result<Box<dyn DashboardData + Send + Sync>> {
         log::debug!("Updating: PeersDashboardData");
-        let peers = client
+        let peers_from_network = if self.enable_fetch_overview_data {
+            Some(
+                client
+                    .post::<(), Overview>("get_overview", ())
+                    .with_context(|| anyhow!("Unable to get peers"))?
+                    .network
+                    .peers,
+            )
+        } else {
+            None
+        };
+
+        let peers_from_raw_rpc = client
             .get_peers()
             .with_context(|| anyhow!("Unable to get peers"))?;
+
         let mut conn_in = 0;
         let mut conn_out = 0;
-        peers.iter().for_each(|x| {
+        peers_from_raw_rpc.iter().for_each(|x| {
             if x.is_outbound {
                 conn_out += 1;
             } else {
@@ -167,11 +195,13 @@ impl DashboardData for PeersDashboardData {
             }
         });
         *self = Self {
+            enable_fetch_overview_data: self.enable_fetch_overview_data,
             connections_in: conn_in,
             connections_out: conn_out,
-            peers: peers
+            peers: peers_from_raw_rpc
                 .into_iter()
-                .map(|peer| PeersItem {
+                .enumerate()
+                .map(|(index, peer)| PeersItem {
                     peer_id: peer.node_id,
                     direction: if peer.is_outbound {
                         PeerDirection::Out
@@ -182,7 +212,11 @@ impl DashboardData for PeersDashboardData {
                         .sync_state
                         .and_then(|x| x.best_known_header_number)
                         .map(|x| x.value()),
-                    latency: 123,
+                    latency: peers_from_network
+                        .as_ref()
+                        .map(|x| x.get(index))
+                        .flatten()
+                        .map(|x| x.latency_ms.value()),
                     warning: None,
                 })
                 .collect(),
@@ -191,7 +225,9 @@ impl DashboardData for PeersDashboardData {
         Ok(Box::new(self.clone()))
     }
 
-    fn set_enable_overview_data(&mut self, _flag: bool) {}
+    fn set_enable_overview_data(&mut self, flag: bool) {
+        self.enable_fetch_overview_data = flag;
+    }
 }
 
 pub fn peers_dashboard(_event_sender: mpsc::Sender<TUIEvent>) -> impl IntoBoxedView + use<> {

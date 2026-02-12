@@ -337,13 +337,13 @@ struct GetOverviewOfOverviewDashboardData {
     pub tx_rejected: u64,
     // in bytes
     pub total_pool_size_in_bytes: u64,
+    pub average_latency: u64,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct OverviewDashboardData {
     pub inbound_peers: usize,
     pub outbound_peers: usize,
-    pub average_latency: isize,
     overview_data: Option<GetOverviewOfOverviewDashboardData>,
     // shannons per KB
     pub average_fee_rate: Option<u64>,
@@ -370,11 +370,6 @@ impl UpdateToView for OverviewDashboardData {
                 self.inbound_peers
             )
         );
-        update_text!(
-            siv,
-            names::AVERAGE_LATENCY,
-            format!("{}ms", self.average_latency)
-        );
 
         if let Some(data) = &self.overview_data {
             update_text!(
@@ -390,12 +385,18 @@ impl UpdateToView for OverviewDashboardData {
             update_text!(siv, names::PROPOSED_TX, format!("{}", data.tx_proposed));
             update_text!(siv, names::COMMITTING_TX, format!("{}", data.tx_committing));
             update_text!(siv, names::REJECTED_TX, format!("{}", data.tx_rejected));
+            update_text!(
+                siv,
+                names::AVERAGE_LATENCY,
+                format!("{}ms", data.average_latency)
+            );
         } else {
             update_text!(siv, names::TOTAL_POOL_SIZE, format!("N/A"));
             update_text!(siv, names::PENDING_TX, format!("N/A"));
             update_text!(siv, names::PROPOSED_TX, format!("N/A"));
             update_text!(siv, names::COMMITTING_TX, format!("N/A"));
             update_text!(siv, names::REJECTED_TX, format!("N/A"));
+            update_text!(siv, names::AVERAGE_LATENCY, format!("N/A"));
         };
 
         update_text!(
@@ -466,12 +467,18 @@ impl DashboardData for OverviewDashboardData {
                 tx_committing: overview_data.pool.committing.value(),
                 tx_rejected: overview_data.pool.total_recent_reject_num.value(),
                 total_pool_size_in_bytes: overview_data.pool.total_tx_size.value(),
+                average_latency: overview_data
+                    .network
+                    .peers
+                    .iter()
+                    .map(|x| x.latency_ms.value())
+                    .sum::<u64>()
+                    / overview_data.network.peers.len() as u64,
             })
         } else {
             None
         };
         *self = OverviewDashboardData {
-            average_latency: -1,
             inbound_peers,
             outbound_peers,
             average_fee_rate: fee_rate_statistics.map(|x| x.mean.value()),
