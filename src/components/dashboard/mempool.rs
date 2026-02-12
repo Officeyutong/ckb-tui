@@ -74,7 +74,6 @@ pub enum MempoolDashboardState {
     WithoutTcpConn,
 }
 
-
 fn update_latest_tx(state: &MempoolDashboatdInnerState, tx: PoolTransactionEntry) {
     let mut guard = state.latest_incoming_txs.write().unwrap();
     guard
