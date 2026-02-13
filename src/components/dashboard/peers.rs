@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use std::{collections::HashMap, str::FromStr, sync::mpsc};
 
 use anyhow::{Context, anyhow};
 use ckb_jsonrpc_types_new::Overview;
@@ -10,6 +10,7 @@ use cursive::{
     views::{LinearLayout, Panel, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
+use tentacle::{multiaddr::MultiAddr, utils::extract_peer_id};
 
 use crate::{
     CURRENT_TAB,
@@ -175,7 +176,17 @@ impl DashboardData for PeersDashboardData {
                     .post::<(), Overview>("get_overview", ())
                     .with_context(|| anyhow!("Unable to get peers"))?
                     .network
-                    .peers,
+                    .peers
+                    .iter()
+                    .map(|x| {
+                        (
+                            extract_peer_id(&MultiAddr::from_str(&x.address).unwrap())
+                                .map(|x| x.to_base58())
+                                .unwrap_or_default(),
+                            x.latency_ms.value(),
+                        )
+                    })
+                    .collect::<HashMap<_, _>>(),
             )
         } else {
             None
@@ -200,9 +211,8 @@ impl DashboardData for PeersDashboardData {
             connections_out: conn_out,
             peers: peers_from_raw_rpc
                 .into_iter()
-                .enumerate()
-                .map(|(index, peer)| PeersItem {
-                    peer_id: peer.node_id,
+                .map(|peer| PeersItem {
+                    peer_id: peer.node_id.clone(),
                     direction: if peer.is_outbound {
                         PeerDirection::Out
                     } else {
@@ -214,9 +224,9 @@ impl DashboardData for PeersDashboardData {
                         .map(|x| x.value()),
                     latency: peers_from_network
                         .as_ref()
-                        .map(|x| x.get(index))
+                        .map(|x| x.get(&peer.node_id))
                         .flatten()
-                        .map(|x| x.latency_ms.value()),
+                        .map(|x| *x),
                     warning: None,
                 })
                 .collect(),
