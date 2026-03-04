@@ -2,8 +2,8 @@
 
 ## Build and Preparation
 
-- It is recommended to use the CKB from this PR https://github.com/nervosnetwork/ckb/pull/4989, otherwise some data will be missing (displayed as N/A)
-    - If using the CKB from PR #4989, you need to add the Terminal module to rpc.modules in ckb.toml
+- It is recommended to use the newest CKB, otherwise some data will be missing (displayed as N/A)
+    - If using the newest CKB, you need to add the Terminal module to rpc.modules in ckb.toml
 - Get this repo
 
 ## Usage

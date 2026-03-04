@@ -136,7 +136,7 @@ fn update_log(data: &LogsDashboardInnerState, logs_entry: CkbLogEntry) {
             time: DateTime::parse_from_str(&logs_entry.date, "%Y-%m-%d %H:%M:%S%.3f %:z")
                 .unwrap()
                 .with_timezone(&Local),
-            category: logs_entry.level.clone(),
+            category: logs_entry.level,
             source: logs_entry.target,
             message: logs_entry.message,
         })
