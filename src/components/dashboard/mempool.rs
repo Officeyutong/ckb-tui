@@ -8,9 +8,9 @@ use anyhow::anyhow;
 use chrono::Local;
 use chrono::TimeZone;
 use chrono::Utc;
+use ckb_jsonrpc_types::Overview;
 use ckb_jsonrpc_types::PoolTransactionEntry;
 use ckb_jsonrpc_types::PoolTransactionReject;
-use ckb_jsonrpc_types_new::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::view::Scrollable;
 use cursive::{

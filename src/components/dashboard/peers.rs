@@ -1,7 +1,7 @@
 use std::{collections::HashMap, str::FromStr, sync::mpsc};
 
 use anyhow::{Context, anyhow};
-use ckb_jsonrpc_types_new::Overview;
+use ckb_jsonrpc_types::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     theme::{BaseColor, ColorStyle},
@@ -140,7 +140,7 @@ impl UpdateToView for PeersDashboardData {
                     }
                 }
                 if count == 0 {
-                    format!("N/A")
+                    "N/A".to_string()
                 } else {
                     format!("{} ms", sum / count)
                 }
@@ -224,9 +224,7 @@ impl DashboardData for PeersDashboardData {
                         .map(|x| x.value()),
                     latency: peers_from_network
                         .as_ref()
-                        .map(|x| x.get(&peer.node_id))
-                        .flatten()
-                        .map(|x| *x),
+                        .and_then(|x| x.get(&peer.node_id)).copied(),
                     warning: None,
                 })
                 .collect(),

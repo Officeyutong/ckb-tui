@@ -7,7 +7,7 @@ pub mod peers;
 use std::sync::mpsc;
 
 use anyhow::{Context, anyhow};
-use ckb_jsonrpc_types_new::Overview;
+use ckb_jsonrpc_types::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
     Cursive,

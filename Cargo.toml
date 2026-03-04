@@ -1,13 +1,13 @@
 [package]
 edition = "2024"
 name = "ckb-tui"
-version = "0.1.1"
+version = "0.1.2"
 
 [dependencies]
 anyhow = "1.0.99"
 chrono = "0.4.42"
-ckb-jsonrpc-types = "1.0.0"
-ckb-jsonrpc-types-new = {git = "https://github.com/nervosnetwork/ckb", branch = "zhangsoledad/tui", package = "ckb-jsonrpc-types"}
+ckb-jsonrpc-types = "^1"
+# ckb-jsonrpc-types-new = {git = "https://github.com/nervosnetwork/ckb", branch = "zhangsoledad/tui", package = "ckb-jsonrpc-types"}
 ckb-sdk = "5.0.0"
 clap = {version = "4.5.46", features = ["derive"]}
 cursive = { version = "0.21.1", features = ["toml"] }
