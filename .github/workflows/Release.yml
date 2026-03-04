@@ -40,13 +40,12 @@ jobs:
 
       - name: Clone ckb 
         run: |
-          git clone --recursive https://github.com/nervosnetwork/ckb ckb-4989
-          cd ckb-4989
-          git checkout zhangsoledad/tui
+          git clone --recursive https://github.com/nervosnetwork/ckb ckb
+          cd ckb
 
-      - name: Build ckb with PR 4989
+      - name: Build ckb
         run: |
-          cd ckb-4989
+          cd ckb
           cargo build --release --locked --bin ckb --features portable
 
       - name: Build release binary
@@ -56,14 +55,14 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cp target/release/ckb-tui ${{ matrix.asset_name }}
-          cp ckb-4989/target/release/ckb ${{ matrix.ckb_name }}
+          cp ckb/target/release/ckb ${{ matrix.ckb_name }}
           tar -czf ${{ matrix.tarball_name }} ${{ matrix.asset_name }} ${{ matrix.ckb_name }}
 
       - name: Prepare artifact (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cp target/release/ckb-tui.exe ${{ matrix.asset_name }}
-          cp ckb-4989/target/release/ckb.exe ${{ matrix.ckb_name }}
+          cp ckb/target/release/ckb.exe ${{ matrix.ckb_name }}
 
       - name: Tarball files (Windows)
         uses: vimtor/action-zip@v1.2
