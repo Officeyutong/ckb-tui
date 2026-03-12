@@ -38,7 +38,7 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Clone ckb 
+      - name: Clone ckb
         run: |
           git clone --recursive https://github.com/nervosnetwork/ckb ckb
           cd ckb
@@ -54,21 +54,24 @@ jobs:
       - name: Prepare artifact (Unix)
         if: matrix.os != 'windows-latest'
         run: |
-          cp target/release/ckb-tui ${{ matrix.asset_name }}
-          cp ckb/target/release/ckb ${{ matrix.ckb_name }}
-          tar -czf ${{ matrix.tarball_name }} ${{ matrix.asset_name }} ${{ matrix.ckb_name }}
+          mkdir -p staging
+          cp target/release/ckb-tui staging/${{ matrix.asset_name }}
+          cp ckb/target/release/ckb staging/${{ matrix.ckb_name }}
+          cd staging
+          tar -czf ../${{ matrix.tarball_name }} ${{ matrix.asset_name }} ${{ matrix.ckb_name }}
 
       - name: Prepare artifact (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          cp target/release/ckb-tui.exe ${{ matrix.asset_name }}
-          cp ckb/target/release/ckb.exe ${{ matrix.ckb_name }}
+          mkdir staging
+          cp target/release/ckb-tui.exe staging/${{ matrix.asset_name }}
+          cp ckb/target/release/ckb.exe staging/${{ matrix.ckb_name }}
 
       - name: Tarball files (Windows)
         uses: vimtor/action-zip@v1.2
         if: matrix.os == 'windows-latest'
         with:
-          files: ${{ matrix.ckb_name }} ${{ matrix.asset_name }}
+          files: staging/${{ matrix.ckb_name }} staging/${{ matrix.asset_name }}
           dest: ${{ matrix.tarball_name }}
 
       - name: Upload artifact
