@@ -337,7 +337,8 @@ struct GetOverviewOfOverviewDashboardData {
     pub tx_rejected: u64,
     // in bytes
     pub total_pool_size_in_bytes: u64,
-    pub average_latency: u64,
+    // `None` when the node has no connected peers
+    pub average_latency: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -388,7 +389,10 @@ impl UpdateToView for OverviewDashboardData {
             update_text!(
                 siv,
                 names::AVERAGE_LATENCY,
-                format!("{}ms", data.average_latency)
+                match data.average_latency {
+                    None => "N/A".to_string(),
+                    Some(v) => format!("{}ms", v),
+                }
             );
         } else {
             update_text!(siv, names::TOTAL_POOL_SIZE, format!("N/A"));
@@ -467,13 +471,17 @@ impl DashboardData for OverviewDashboardData {
                 tx_committing: overview_data.pool.committing.value(),
                 tx_rejected: overview_data.pool.total_recent_reject_num.value(),
                 total_pool_size_in_bytes: overview_data.pool.total_tx_size.value(),
-                average_latency: overview_data
-                    .network
-                    .peers
-                    .iter()
-                    .map(|x| x.latency_ms.value())
-                    .sum::<u64>()
-                    / overview_data.network.peers.len() as u64,
+                average_latency: {
+                    let peers = &overview_data.network.peers;
+                    if peers.is_empty() {
+                        None
+                    } else {
+                        Some(
+                            peers.iter().map(|x| x.latency_ms.value()).sum::<u64>()
+                                / peers.len() as u64,
+                        )
+                    }
+                },
             })
         } else {
             None
