@@ -197,13 +197,14 @@ impl UpdateToView for BlockchainDashboardState {
 impl DashboardState for BlockchainDashboardState {
     fn accept_event(&mut self, event: &TUIEvent) {
         if let TUIEvent::OpenConsensusModal(sender) = event
-            && let Some(consensus) = self.consensus.clone() {
-                sender
-                    .send(Box::new(move |siv| {
-                        siv.add_layer(consensus_modal(&consensus));
-                    }))
-                    .unwrap();
-            }
+            && let Some(consensus) = self.consensus.clone()
+        {
+            sender
+                .send(Box::new(move |siv| {
+                    siv.add_layer(consensus_modal(&consensus));
+                }))
+                .unwrap();
+        }
     }
     fn update_state(&mut self) -> anyhow::Result<()> {
         if let Some(data) = &mut self.overview_data {

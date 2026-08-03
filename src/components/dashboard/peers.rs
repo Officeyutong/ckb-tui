@@ -224,7 +224,8 @@ impl DashboardData for PeersDashboardData {
                         .map(|x| x.value()),
                     latency: peers_from_network
                         .as_ref()
-                        .and_then(|x| x.get(&peer.node_id)).copied(),
+                        .and_then(|x| x.get(&peer.node_id))
+                        .copied(),
                     warning: None,
                 })
                 .collect(),
