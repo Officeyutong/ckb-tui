@@ -20,12 +20,14 @@ struct Args {
     theme_file: Option<String>,
 }
 fn main() -> anyhow::Result<()> {
+    cursive::logger::init();
     let args = Args::parse();
     start_ckb_tui(
         &args.rpc_url,
         args.tcp_url,
         args.refresh_interval,
         args.theme_file,
+        false,
     )?;
 
     Ok(())

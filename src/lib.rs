@@ -46,10 +46,13 @@ pub fn start_ckb_tui(
     tcp_url: Option<String>,
     refresh_interval: usize,
     theme_file: Option<String>,
+    debug: bool,
 ) -> anyhow::Result<()> {
-    cursive::logger::set_filter_levels_from_env();
-    cursive::logger::init();
-
+    if debug {
+        cursive::logger::set_external_filter_level(log::LevelFilter::Debug);
+    } else {
+        cursive::logger::set_filter_levels_from_env();
+    }
     let client = CkbRpcClient::new(rpc_url);
     let mut siv = cursive::default();
     if let Some(theme_file) = theme_file {
