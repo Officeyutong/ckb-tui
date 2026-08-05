@@ -10,7 +10,6 @@ use std::{
 use anyhow::bail;
 use ckb_jsonrpc_types::Overview;
 use ckb_sdk::CkbRpcClient;
-use clap::Parser;
 use cursive::{
     Cursive,
     view::Resizable,
@@ -42,33 +41,18 @@ enum SyncRequest {
     RequestSync { pop_layer_at_end: bool },
 }
 
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// RPC endpoint of CKB node
-    #[arg(short = 'r', long, default_value_t = String::from("http://127.0.0.1:8114"))]
-    rpc_url: String,
-    /// TCP endpoint of CKB node, used for receiving pushed transactions data
-    /// If not provided, latest transactions and rejected transactions won't be displayed
-    #[arg(short, long)]
+pub fn start_ckb_tui(
+    rpc_url: &str,
     tcp_url: Option<String>,
-    /// Refresh interval of displayed data, defaults to 300ms
-    #[arg(short = 'i', long, default_value_t = 300)]
     refresh_interval: usize,
-
-    /// Theme file to use for cursive. See https://github.com/gyscos/cursive/blob/main/cursive/examples/assets/style.toml for an example.
-    #[arg(long)]
     theme_file: Option<String>,
-}
-
-pub fn start_ckb_tui(args: &[String]) -> anyhow::Result<()> {
+) -> anyhow::Result<()> {
     cursive::logger::set_filter_levels_from_env();
     cursive::logger::init();
-    let args = Args::try_parse_from(args)?;
 
-    let client = CkbRpcClient::new(&args.rpc_url);
+    let client = CkbRpcClient::new(rpc_url);
     let mut siv = cursive::default();
-    if let Some(theme_file) = args.theme_file {
+    if let Some(theme_file) = theme_file {
         siv.load_theme_file(theme_file).unwrap();
     }
     siv.add_global_callback('q', |s| s.quit());
@@ -196,10 +180,10 @@ pub fn start_ckb_tui(args: &[String]) -> anyhow::Result<()> {
             let mut blockchain_state = BlockchainDashboardState::new(
                 client.clone(),
                 enable_fetch_overview,
-                args.tcp_url.clone(),
+                tcp_url.clone(),
             );
-            let mut mempool_state = MempoolDashboardState::new(args.tcp_url.clone());
-            let mut logs_state = LogsDashboardState::new(args.tcp_url.clone());
+            let mut mempool_state = MempoolDashboardState::new(tcp_url.clone());
+            let mut logs_state = LogsDashboardState::new(tcp_url.clone());
             let mut tick_count = 0;
             loop {
                 // Accept events per millisesond
@@ -210,7 +194,7 @@ pub fn start_ckb_tui(args: &[String]) -> anyhow::Result<()> {
                     mempool_state.accept_event(&e);
                     logs_state.accept_event(&e);
                 }
-                if tick_count < args.refresh_interval {
+                if tick_count < refresh_interval {
                     std::thread::sleep(Duration::from_millis(1));
                     continue;
                 } else {
