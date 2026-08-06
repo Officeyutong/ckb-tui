@@ -10,7 +10,20 @@ use cursive::{
     views::{LinearLayout, Panel, TextView},
 };
 use cursive_table_view::{TableView, TableViewItem};
-use tentacle::{multiaddr::MultiAddr, utils::extract_peer_id};
+use tentacle_multiaddr::{Multiaddr, Protocol};
+
+/// Get peer id from multiaddr
+pub fn extract_peer_id_base58(addr: &Multiaddr) -> Option<String> {
+    let mut iter = addr.iter();
+
+    iter.find_map(|proto| {
+        if let Protocol::P2P(raw_bytes) = proto {
+            Some(bs58::encode(raw_bytes).into_string())
+        } else {
+            None
+        }
+    })
+}
 
 use crate::{
     CURRENT_TAB,
@@ -178,8 +191,7 @@ impl DashboardData for PeersDashboardData {
                     .iter()
                     .map(|x| {
                         (
-                            extract_peer_id(&MultiAddr::from_str(&x.address).unwrap())
-                                .map(|x| x.to_base58())
+                            extract_peer_id_base58(&Multiaddr::from_str(&x.address).unwrap())
                                 .unwrap_or_default(),
                             x.latency_ms.value(),
                         )
