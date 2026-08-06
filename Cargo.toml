@@ -2,6 +2,7 @@
 edition = "2024"
 name = "ckb-tui"
 version = "0.1.2"
+license = "MIT"
 
 [dependencies]
 anyhow = "1.0.99"
