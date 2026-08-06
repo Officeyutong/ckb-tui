@@ -139,11 +139,9 @@ impl UpdateToView for PeersDashboardData {
                         count += 1;
                     }
                 }
-                if count == 0 {
-                    "N/A".to_string()
-                } else {
-                    format!("{} ms", sum / count)
-                }
+                sum.checked_div(count)
+                    .map(|x| format!("{} ms", x))
+                    .unwrap_or("N/A".to_string())
             }
         );
         siv.call_on_name(PEERS_TABLE, |s: &mut TableView<PeersItem, PeersColumn>| {

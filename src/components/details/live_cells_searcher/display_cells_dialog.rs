@@ -265,10 +265,10 @@ pub fn display_cells_dialog(
         client.clone(),
     )));
     let initialized = Arc::new(AtomicBool::new(false));
-    let initialized_cloned = initialized.clone();
-    let data_cloned = data.clone();
-    let data_cloned_2 = data.clone();
-    let data_cloned_3 = data.clone();
+    let initialized_cloned = std::sync::Arc::<AtomicBool>::clone(&initialized);
+    let data_cloned = Arc::<Mutex<CellsData>>::clone(&data);
+    let data_cloned_2 = Arc::<Mutex<CellsData>>::clone(&data);
+    let data_cloned_3 = Arc::<Mutex<CellsData>>::clone(&data);
 
     OnLayoutView::new(
         Dialog::new()
@@ -312,7 +312,12 @@ pub fn display_cells_dialog(
                     .child(
                         LinearLayout::horizontal()
                             .child(Button::new("Prev", move |siv| {
-                                CellsData::switch_to_prev_page(data_cloned_2.clone(), siv);
+                                CellsData::switch_to_prev_page(
+                                    std::sync::Arc::<std::sync::Mutex<CellsData>>::clone(
+                                        &data_cloned_2,
+                                    ),
+                                    siv,
+                                );
                             }))
                             .child(
                                 TextView::new("Page 1")
@@ -321,7 +326,12 @@ pub fn display_cells_dialog(
                                     .min_width(40),
                             )
                             .child(Button::new("Next", move |siv| {
-                                CellsData::switch_to_next_page(data_cloned_3.clone(), siv);
+                                CellsData::switch_to_next_page(
+                                    std::sync::Arc::<std::sync::Mutex<CellsData>>::clone(
+                                        &data_cloned_3,
+                                    ),
+                                    siv,
+                                );
                             }))
                             .align_center(),
                     ),
@@ -332,7 +342,7 @@ pub fn display_cells_dialog(
         move |v, s| {
             v.layout(s);
             if !initialized_cloned.load(std::sync::atomic::Ordering::SeqCst) {
-                let value = data_cloned.clone();
+                let value = std::sync::Arc::<std::sync::Mutex<CellsData>>::clone(&data_cloned);
                 cb_sink
                     .send(Box::new(move |siv| {
                         load_next_page(siv, value, true);

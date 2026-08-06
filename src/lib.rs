@@ -75,7 +75,7 @@ pub fn start_ckb_tui(
     let sync_request_tx = {
         let (tx, rx) = std::sync::mpsc::channel::<SyncRequest>();
         let cb_sink = siv.cb_sink().clone();
-        let loading_variable = loading_variable.clone();
+        let loading_variable = std::sync::Arc::<AtomicBool>::clone(&loading_variable);
         let client = client.clone();
         std::thread::spawn(move || {
             {
@@ -154,7 +154,7 @@ pub fn start_ckb_tui(
     };
     {
         let tx = sync_request_tx.clone();
-        let loading_variable = loading_variable.clone();
+        let loading_variable = std::sync::Arc::<AtomicBool>::clone(&loading_variable);
         siv.add_global_callback('r', move |siv| {
             if loading_variable.load(std::sync::atomic::Ordering::SeqCst) {
                 return;
