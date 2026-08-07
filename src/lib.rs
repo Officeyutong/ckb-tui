@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use ckb_jsonrpc_types::Overview;
 use ckb_sdk::CkbRpcClient;
 use cursive::{
@@ -56,7 +56,8 @@ pub fn start_ckb_tui(
     let client = CkbRpcClient::new(rpc_url);
     let mut siv = cursive::default();
     if let Some(theme_file) = theme_file {
-        siv.load_theme_file(theme_file).unwrap();
+        siv.load_theme_file(theme_file)
+            .map_err(|e| anyhow!("{:?}", e))?;
     }
     siv.add_global_callback('q', |s| s.quit());
     siv.add_global_callback('~', cursive::Cursive::toggle_debug_console);
