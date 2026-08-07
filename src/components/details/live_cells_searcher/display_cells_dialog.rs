@@ -25,6 +25,8 @@ use crate::{
     utils::shorten_hex,
 };
 
+const INDEXER_UNAVAILABLE_MESSAGE: &str = "CKB Indexer RPC is unavailable.\n\nEnable the Indexer module in your CKB node's RPC configuration, restart the node, and try again.";
+
 declare_names!(
     names,
     "live_cells_searcher_display_cells_dialog_",
@@ -223,15 +225,15 @@ fn load_next_page(
             AsyncState::Available(TextView::new("Loaded"))
         }
         Ok(Err(e)) => {
+            let message = live_cells_error_message(&e);
             cb_sink
                 .send(Box::new(move |siv| {
                     siv.pop_layer();
-                    siv.add_layer(Dialog::around(TextView::new(format!("{:?}", e))).button(
-                        "Close",
-                        |siv| {
+                    siv.add_layer(
+                        Dialog::around(TextView::new(message)).button("Close", |siv| {
                             siv.pop_layer();
-                        },
-                    ));
+                        }),
+                    );
                 }))
                 .unwrap();
             AsyncState::Pending
@@ -242,6 +244,22 @@ fn load_next_page(
 
     siv.add_layer(async_view);
 }
+
+fn live_cells_error_message(error: &anyhow::Error) -> String {
+    let method_not_found = error.chain().any(|cause| {
+        cause
+            .to_string()
+            .to_ascii_lowercase()
+            .contains("method not found")
+    });
+
+    if method_not_found {
+        INDEXER_UNAVAILABLE_MESSAGE.to_owned()
+    } else {
+        format!("{error:#}")
+    }
+}
+
 pub fn display_cells_dialog(
     client: &CkbRpcClient,
     lock_args: JsonBytes,
@@ -418,4 +436,26 @@ fn cell_detail_dialog(data: &Cell) -> impl IntoBoxedView {
             siv.pop_layer();
         })
         .content(list_view)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{INDEXER_UNAVAILABLE_MESSAGE, live_cells_error_message};
+
+    #[test]
+    fn explains_how_to_enable_indexer_when_rpc_method_is_missing() {
+        let error = anyhow::anyhow!("jsonrpc error: Method not found: Method not found");
+
+        assert_eq!(
+            live_cells_error_message(&error),
+            INDEXER_UNAVAILABLE_MESSAGE
+        );
+    }
+
+    #[test]
+    fn preserves_unrelated_rpc_errors() {
+        let error = anyhow::anyhow!("connection refused");
+
+        assert_eq!(live_cells_error_message(&error), "connection refused");
+    }
 }
